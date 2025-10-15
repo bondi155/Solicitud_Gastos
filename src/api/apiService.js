@@ -160,6 +160,11 @@ rejectRequest: async (id, comments, approverId) => {
     const response = await axios.get(`${API_BASE_URL}/api/reports?${params}`)
     return response.data
   },
+
+  updateLineProvider: async (lineId, provider) => {
+  const response = await axios.post(`${API_BASE_URL}/api/request-lines/${lineId}/provider`, { provider })
+  return response.data
+},
 };
 
 export default apiService;

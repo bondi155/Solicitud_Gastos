@@ -24,23 +24,23 @@ function CustomButton({ isLoading }) {
         my: 5,
         color: "#FFFFFF",
         borderColor: "#005690ff",
-        backgroundColor: "#1176eaff", // Color de fondo del botón  8f2e2e 828b8ed6
+        backgroundColor: "#5f6061ff", // Color de fondo del botón  8f2e2e 828b8ed6
         "&:hover": {
-          backgroundColor: "#1176eaff",
-          borderColor: "#005690ff",
+          backgroundColor: "#1313149a",
+          borderColor: "#060707ff",
           color: "#ffffff",
         },
         "&:active": {
-          backgroundColor: "#1176eaff",
+          backgroundColor: "#494b4cff",
           borderColor: "#005690ff",
         },
       }}
     >
       {isLoading ? (
-        <CircularProgress size={24} sx={{ color: "#1176eaff" }} /> // Spinner en blanco
+        <CircularProgress size={24} sx={{ color: "#58595aff" }} /> // Spinner en blanco
       ) : (
         <>
-          Entrar
+          Ingresar
           <LoginIcon sx={{ ml: 0.5 }} />
         </>
       )}
@@ -62,13 +62,13 @@ export default function SlotPropsSignIn() {
         styleOverrides: {
           underline: {
             "&:before": {
-              borderBottomColor: "#1176eaff", // Color de la línea antes de enfoque
+              borderBottomColor: "#757576ff", // Color de la línea antes de enfoque
             },
             "&:hover:not(.Mui-disabled):before": {
-              borderBottomColor: "#1176eaff", // Color de la línea al hacer hover
+              borderBottomColor: "#757576ff", // Color de la línea al hacer hover
             },
             "&:after": {
-              borderBottomColor: "#1176eaff", // Color de la línea cuando está enfocado (gris oscuro)
+              borderBottomColor: "#757576ff", // Color de la línea cuando está enfocado (gris oscuro)
             },
           },
         },
@@ -78,7 +78,7 @@ export default function SlotPropsSignIn() {
           root: {
             color: "#00080dff", // Color inicial del label
             "&.Mui-focused": {
-              color: "#1176eaff", // Color del label cuando está enfocado
+              color: "#727272ff", // Color del label cuando está enfocado
             },
           },
         },
@@ -105,7 +105,7 @@ export default function SlotPropsSignIn() {
           icon: "error",
           title: "Oops...",
           text: "Contraseña incorrecta",
-          confirmButtonColor: "#8f2e2e", // Aquí tu color personalizado
+          confirmButtonColor: "#b4b4b4ff", // Aquí tu color personalizado
           confirmButtonText: "Aceptar",
         });
       } else if (response.data.code === "USR_NOT_EXIST") {
@@ -113,7 +113,7 @@ export default function SlotPropsSignIn() {
           icon: "error",
           title: "Oops...",
           text: "El usuario no existe",
-          confirmButtonColor: "#8f2e2e", // Aquí tu color personalizado
+          confirmButtonColor: "#b4b4b4ff", // Aquí tu color personalizado
           confirmButtonText: "Aceptar",
         });
       } else {
@@ -138,7 +138,7 @@ export default function SlotPropsSignIn() {
         icon: "error",
         title: "Oops...",
         text: "Error de conexión",
-        confirmButtonColor: "#8f2e2e", // Aquí tu color personalizado
+        confirmButtonColor: "#b4b4b4ff",
         confirmButtonText: "Aceptar",
       });
     } finally {

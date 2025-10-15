@@ -72,39 +72,55 @@ async function resetPassword__(req, res) {
 
 // POST /api/requests
 async function createRequest(req, res) {
-  try {
-    const {
-      title,
-      amount,
-      category,
-      description,
-      date,
-      department,
-      costCenter,
-      vendor,
-      userId, // ID del usuario logueado
-    } = req.body;
+  const connection = await pool.getConnection();
 
-    // Validaciones
-    if (!title || !amount || !category || !description || !date) {
+  try {
+    await connection.beginTransaction();
+
+    let lines = req.body.lines;
+    if (typeof lines === "string") {
+      lines = JSON.parse(lines);
+    }
+
+    const { userId, department, costCenter, date, title } = req.body;
+
+    if (
+      !userId ||
+      !department ||
+      !date ||
+      !title ||
+      !lines ||
+      !Array.isArray(lines) ||
+      lines.length === 0
+    ) {
+      await connection.rollback();
+      connection.release();
       return res.status(400).json({
         success: false,
-        message: "Faltan campos requeridos",
+        message: "Faltan campos requeridos o no hay líneas de gastos",
       });
     }
 
-    const [categoryData] = await pool.query(
-      "SELECT id FROM categorias WHERE nombre = ?",
-      [category]
-    );
-    const [departmentData] = await pool.query(
+    for (const line of lines) {
+      if (!line.category || !line.amount || !line.description) {
+        await connection.rollback();
+        connection.release();
+        return res.status(400).json({
+          success: false,
+          message: "Cada línea debe tener categoría, monto y descripción",
+        });
+      }
+    }
+
+    // Obtener IDs de departamento y centro de costo
+    const [departmentData] = await connection.query(
       "SELECT id FROM departamentos WHERE nombre = ?",
       [department]
     );
 
     let costCenterId = null;
     if (costCenter) {
-      const [costCenterData] = await pool.query(
+      const [costCenterData] = await connection.query(
         "SELECT id FROM centros_costos WHERE codigo = ?",
         [costCenter]
       );
@@ -113,42 +129,52 @@ async function createRequest(req, res) {
       }
     }
 
-    if (!categoryData.length || !departmentData.length) {
+    if (!departmentData.length) {
+      await connection.rollback();
+      connection.release();
       return res.status(400).json({
         success: false,
-        message: "Categoría o departamento inválido",
+        message: "Departamento inválido",
       });
     }
 
-    const [result] = await pool.query(
+    const montoTotal = lines.reduce(
+      (sum, line) => sum + Number.parseFloat(line.amount),
+      0
+    );
+
+    const [result] = await connection.query(
       `
       INSERT INTO solicitudes 
-      (usuario_id, departamento_id, centro_costo_id, categoria_id, monto, descripcion, proveedor, estado, fecha_solicitud)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?)
+      (titulo, usuario_id, departamento_id, centro_costo_id, monto_total, estado, fecha_solicitud)
+      VALUES (?, ?, ?, ?, ?, 'Pendiente', ?)
     `,
-      [
-        userId,
-        departmentData[0].id,
-        costCenterId,
-        categoryData[0].id,
-        amount,
-        description,
-        vendor,
-        date,
-      ]
+      [title, userId, departmentData[0].id, costCenterId, montoTotal, date]
     );
 
     const requestId = result.insertId;
 
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Insertar línea usando el ID de categoría directamente
+      await connection.query(
+        `
+        INSERT INTO solicitud_lineas 
+        (solicitud_id, categoria_id, monto, descripcion, orden)
+        VALUES (?, ?, ?, ?, ?)
+      `,
+        [requestId, line.category, line.amount, line.description, i + 1]
+      );
+    }
+
+    // Procesar archivos adjuntos
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
         try {
-          // Subir archivo a Vercel Blob
           const blobData = await uploadToBlob(file, "solicitudes");
-          console.log("[v0 Backend] File uploaded to Blob:", blobData.url);
 
-          // Guardar información en la base de datos
-          await pool.query(
+          await connection.query(
             `
             INSERT INTO archivos_adjuntos 
             (solicitud_id, nombre_archivo, ruta_archivo, tipo_archivo, tamano)
@@ -164,10 +190,12 @@ async function createRequest(req, res) {
           );
         } catch (uploadError) {
           console.error("Error uploading file to Blob:", uploadError);
-          // Continuar con los demás archivos si uno falla
         }
       }
     }
+
+    await connection.commit();
+    connection.release();
 
     res.json({
       success: true,
@@ -175,99 +203,114 @@ async function createRequest(req, res) {
       data: { id: requestId },
     });
   } catch (error) {
+    await connection.rollback();
+    connection.release();
     console.error("Error en createRequest:", error);
     res
       .status(500)
       .json({ success: false, message: "Error al crear solicitud" });
   }
 }
-
 // POST /api/requests/:id/approve
 async function approveRequest(req, res) {
+  const connection = await pool.getConnection();
+
   try {
-    const { id } = req.params
-    const { comments, approverId } = req.body // ID del aprobador
+    await connection.beginTransaction();
 
-    console.log("[v0 Backend] ===== APPROVE REQUEST =====")
-    console.log("[v0 Backend] Request ID:", id)
-    console.log("[v0 Backend] Full req.body:", req.body)
-    console.log("[v0 Backend] comments:", comments)
-    console.log("[v0 Backend] approverId:", approverId)
-    console.log("[v0 Backend] approverId type:", typeof approverId)
+    const { id } = req.params;
+    const { comments, approverId } = req.body;
 
-    await pool.query(
-      `
-      UPDATE solicitudes 
-      SET estado = 'Aprobada', 
-          aprobador_id = ?,
-          comentario_aprobacion = ?,
-          fecha_aprobacion = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `,
-      [approverId, comments || null, id],
-    )
+    // Actualizar estado de la solicitud
+    await connection.query(
+      `UPDATE solicitudes 
+       SET estado = 'Aprobada', 
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [id]
+    );
 
-    console.log("[v0 Backend] Update query executed successfully")
+    // Insertar en tabla aprobaciones
+    await connection.query(
+      `INSERT INTO aprobaciones 
+       (solicitud_id, aprobador_id, accion, comentario, fecha_aprobacion)
+       VALUES (?, ?, 'Aprobada', ?, CURRENT_TIMESTAMP)`,
+      [id, approverId, comments || null]
+    );
+
+    await connection.commit();
+    connection.release();
 
     res.json({
       success: true,
       message: "Solicitud aprobada exitosamente",
-    })
+    });
   } catch (error) {
-    console.error("Error en approveRequest:", error)
-    res.status(500).json({ success: false, message: "Error al aprobar solicitud" })
+    await connection.rollback();
+    connection.release();
+    console.error("Error en approveRequest:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Error al aprobar solicitud" });
   }
 }
 
 // POST /api/requests/:id/reject
 async function rejectRequest(req, res) {
-  try {
-    const { id } = req.params
-    const { comments, approverId } = req.body // ID del aprobador
+  const connection = await pool.getConnection();
 
-    console.log("[v0 Backend] ===== REJECT REQUEST =====")
-    console.log("[v0 Backend] Request ID:", id)
-    console.log("[v0 Backend] Full req.body:", req.body)
-    console.log("[v0 Backend] comments:", comments)
-    console.log("[v0 Backend] approverId:", approverId)
-    console.log("[v0 Backend] approverId type:", typeof approverId)
+  try {
+    await connection.beginTransaction();
+
+    const { id } = req.params;
+    const { comments, approverId } = req.body;
 
     if (!comments) {
+      await connection.rollback();
+      connection.release();
       return res.status(400).json({
         success: false,
         message: "Los comentarios son obligatorios para rechazar",
-      })
+      });
     }
 
-    await pool.query(
-      `
-      UPDATE solicitudes 
-      SET estado = 'Rechazada',
-          aprobador_id = ?,
-          comentario_aprobacion = ?,
-          fecha_aprobacion = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `,
-      [approverId, comments, id],
-    )
+    // Actualizar estado de la solicitud
+    await connection.query(
+      `UPDATE solicitudes 
+       SET estado = 'Rechazada',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [id]
+    );
 
-    console.log("[v0 Backend] Update query executed successfully")
+    // Insertar en tabla aprobaciones
+    await connection.query(
+      `INSERT INTO aprobaciones 
+       (solicitud_id, aprobador_id, accion, comentario, fecha_aprobacion)
+       VALUES (?, ?, 'Rechazada', ?, CURRENT_TIMESTAMP)`,
+      [id, approverId, comments]
+    );
+
+    await connection.commit();
+    connection.release();
 
     res.json({
       success: true,
       message: "Solicitud rechazada exitosamente",
-    })
+    });
   } catch (error) {
-    console.error("Error en rejectRequest:", error)
-    res.status(500).json({ success: false, message: "Error al rechazar solicitud" })
+    await connection.rollback();
+    connection.release();
+    console.error("Error en rejectRequest:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Error al rechazar solicitud" });
   }
 }
 // GET /api/requests/:id
 async function getRequestDetail(req, res) {
   try {
-    const { id } = req.params
+    const { id } = req.params;
 
     const [result] = await pool.query(
       `
@@ -288,11 +331,13 @@ async function getRequestDetail(req, res) {
       LEFT JOIN usuarios aprobador ON s.aprobador_id = aprobador.id
       WHERE s.id = ?
     `,
-      [id],
-    )
+      [id]
+    );
 
     if (result.length === 0) {
-      return res.status(404).json({ success: false, message: "Solicitud no encontrada" })
+      return res
+        .status(404)
+        .json({ success: false, message: "Solicitud no encontrada" });
     }
 
     // Obtener archivos adjuntos
@@ -302,11 +347,11 @@ async function getRequestDetail(req, res) {
       FROM archivos_adjuntos
       WHERE solicitud_id = ?
     `,
-      [id],
-    )
+      [id]
+    );
 
-    const approvalHistory = []
-    const solicitud = result[0]
+    const approvalHistory = [];
+    const solicitud = result[0];
 
     if (solicitud.aprobador_id && solicitud.fecha_aprobacion) {
       approvalHistory.push({
@@ -314,7 +359,7 @@ async function getRequestDetail(req, res) {
         reason: solicitud.comentario_aprobacion || "",
         date: solicitud.fecha_aprobacion,
         approvedBy: solicitud.approvedByName || "Usuario desconocido",
-      })
+      });
     }
 
     res.json({
@@ -324,13 +369,13 @@ async function getRequestDetail(req, res) {
         attachments: attachments,
         approvalHistory: approvalHistory,
       },
-    })
+    });
   } catch (error) {
-    console.error("Error en getRequestDetail:", error)
+    console.error("Error en getRequestDetail:", error);
     res.status(500).json({
       success: false,
       message: "Error al obtener detalle de solicitud",
-    })
+    });
   }
 }
 // ==================== CONFIGURACIÓN - CATEGORÍAS ====================
@@ -554,12 +599,10 @@ async function updateCostCenter(req, res) {
     });
   } catch (error) {
     console.error("Error en updateCostCenter:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error al actualizar centro de costos",
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error al actualizar centro de costos",
+    });
   }
 }
 
@@ -581,7 +624,32 @@ async function deleteCostCenter(req, res) {
       .json({ success: false, message: "Error al eliminar centro de costos" });
   }
 }
+// ==================== CONFIGURACIÓN - LÍNEAS DE SOLICITUD ====================
 
+// POST /api/request-lines/:id/provider
+async function updateLineProvider(req, res) {
+  try {
+    const { id } = req.params;
+    const { provider } = req.body;
+
+    await pool.query(
+      `UPDATE solicitud_lineas 
+       SET proveedor = ?
+       WHERE id = ?`,
+      [provider, id]
+    );
+
+    res.json({
+      success: true,
+      message: "Proveedor actualizado exitosamente",
+    });
+  } catch (error) {
+    console.error("Error en updateLineProvider:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Error al actualizar proveedor" });
+  }
+}
 // ==================== CONFIGURACIÓN - USUARIOS ====================
 
 // POST /api/users
@@ -616,7 +684,13 @@ async function createUser(req, res) {
     const [result] = await pool.query(
       `INSERT INTO usuarios (nombre, email, rol, departamento_id, password_hash, activo)
        VALUES (?, ?, ?, ?, ?, 1)`,
-      [name, email, role, deptData.length > 0 ? deptData[0].id : null, passwordHash]
+      [
+        name,
+        email,
+        role,
+        deptData.length > 0 ? deptData[0].id : null,
+        passwordHash,
+      ]
     );
 
     res.json({
@@ -626,14 +700,14 @@ async function createUser(req, res) {
     });
   } catch (error) {
     console.error("Error en createUser:", error);
-    
+
     if (error.code === "ER_DUP_ENTRY") {
       return res.status(400).json({
         success: false,
         message: "Este email ya está registrado",
       });
     }
-    
+
     res.status(500).json({ success: false, message: "Error al crear usuario" });
   }
 }
@@ -705,6 +779,7 @@ module.exports = {
   createCategory,
   updateCategory,
   deleteCategory,
+  updateLineProvider,
   createDepartment,
   updateDepartment,
   deleteDepartment,

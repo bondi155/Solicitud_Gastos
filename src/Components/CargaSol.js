@@ -14,28 +14,44 @@ import {
   InputAdornment,
   CircularProgress,
   Alert,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from "@mui/material"
-import { Upload as UploadIcon, Close as CloseIcon, AttachMoney as AttachMoneyIcon } from "@mui/icons-material"
+import {
+  Upload as UploadIcon,
+  Close as CloseIcon,
+  AttachMoney as AttachMoneyIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon,
+} from "@mui/icons-material"
 import apiService from "../api/apiService"
+
 export default function RequestForm({ onSubmit, onCancel }) {
+  const [lines, setLines] = useState([])
+  const [currentLine, setCurrentLine] = useState({
+    category: "",
+    amount: "",
+    description: "",
+  })
+
   const [formData, setFormData] = useState({
     title: "",
-    amount: "",
-    category: "",
-    description: "",
     date: "",
     department: "",
     costCenter: "",
-    vendor: "",
   })
   const [attachments, setAttachments] = useState([])
 
   const [categories, setCategories] = useState([])
   const [departments, setDepartments] = useState([])
   const [costCenters, setCostCenters] = useState([])
-  const [users, setUsers] = useState([]) // Added users state
-  const [loggedUser, setLoggedUser] = useState(null) // Added state for logged user
-  const [loggedUserId, setLoggedUserId] = useState(null) // Added state for logged user ID
+  const [users, setUsers] = useState([])
+  const [loggedUser, setLoggedUser] = useState(null)
+  const [loggedUserId, setLoggedUserId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
@@ -70,13 +86,12 @@ export default function RequestForm({ onSubmit, onCancel }) {
         setCategories(categoriesArray)
         setDepartments(departmentsArray)
         setCostCenters(centersArray)
-        setUsers(usersArray) // Set users state
+        setUsers(usersArray)
 
         const currentUser = usersArray.find((u) => u.id === Number.parseInt(userId))
 
         if (currentUser) {
           setLoggedUser(currentUser)
-          console.log("[v0] Logged user found:", currentUser.name)
         } else {
           setError(`No se encontró el usuario con ID ${userId} en la base de datos.`)
         }
@@ -91,8 +106,8 @@ export default function RequestForm({ onSubmit, onCancel }) {
         setCategories([])
         setDepartments([])
         setCostCenters([])
-        setUsers([]) // Reset users on error
-        setLoggedUser(null) // Reset logged user on error
+        setUsers([])
+        setLoggedUser(null)
         setError(
           "Error al cargar datos desde la base de datos. Por favor recargue la página o contacte al administrador.",
         )
@@ -104,13 +119,43 @@ export default function RequestForm({ onSubmit, onCancel }) {
     fetchFormData()
   }, [])
 
+  const handleAddLine = () => {
+    if (!currentLine.category || !currentLine.amount || !currentLine.description) {
+      setError("Por favor complete todos los campos de la línea antes de agregar")
+      return
+    }
+
+    const categoryName = categories.find((c) => c.id === currentLine.category)?.name || ""
+
+    setLines([
+      ...lines,
+      {
+        ...currentLine,
+        categoryName,
+        id: Date.now(), // ID temporal para identificar la línea
+      },
+    ])
+
+    // Limpiar el formulario de línea actual
+    setCurrentLine({
+      category: "",
+      amount: "",
+      description: "",
+    })
+    setError(null)
+  }
+
+  const handleRemoveLine = (lineId) => {
+    setLines(lines.filter((line) => line.id !== lineId))
+  }
+
+  const getTotalAmount = () => {
+    return lines.reduce((sum, line) => sum + Number.parseFloat(line.amount || 0), 0).toFixed(2)
+  }
+
   const handleFileChange = (e) => {
-    console.log("[v0] File input changed, files:", e.target.files)
     const files = Array.from(e.target.files)
-    console.log("[v0] Files array:", files)
-    console.log("[v0] Files count:", files.length)
     setAttachments([...attachments, ...files])
-    console.log("[v0] Attachments after update:", [...attachments, ...files])
   }
 
   const removeAttachment = (index) => {
@@ -124,43 +169,35 @@ export default function RequestForm({ onSubmit, onCancel }) {
       setSubmitting(true)
       setError(null)
 
+      if (lines.length === 0) {
+        setError("Debe agregar al menos una línea de gasto antes de enviar la solicitud")
+        setSubmitting(false)
+        return
+      }
+
       if (!loggedUserId) {
         setError("No se encontró un usuario logueado. Por favor inicie sesión.")
         setSubmitting(false)
         return
       }
 
-      console.log("[v0] Using logged userId:", loggedUserId)
-      console.log("[v0] Current attachments state:", attachments)
-      console.log("[v0] Attachments length:", attachments.length)
-
       const formDataToSend = new FormData()
 
       formDataToSend.append("title", formData.title)
-      formDataToSend.append("amount", Number.parseFloat(formData.amount))
-      formDataToSend.append("category", formData.category)
-      formDataToSend.append("description", formData.description)
       formDataToSend.append("date", formData.date)
       formDataToSend.append("requester", loggedUser?.name || "")
       formDataToSend.append("department", formData.department)
       formDataToSend.append("costCenter", formData.costCenter || "")
-      formDataToSend.append("vendor", formData.vendor || "")
       formDataToSend.append("userId", loggedUserId)
+      formDataToSend.append("totalAmount", getTotalAmount())
 
-      attachments.forEach((file, index) => {
-        console.log(`[v0] Appending file ${index}:`, file.name, file.size, file.type)
+      formDataToSend.append("lines", JSON.stringify(lines))
+
+      attachments.forEach((file) => {
         formDataToSend.append("attachments", file)
       })
 
-      console.log("[v0] Sending request with files:", attachments.length)
-      console.log("[v0] FormData entries:")
-      for (const pair of formDataToSend.entries()) {
-        console.log(pair[0], pair[1])
-      }
-
       const result = await apiService.createRequest(formDataToSend)
-
-      console.log("[v0] Request created successfully:", result)
 
       alert("Solicitud creada exitosamente")
 
@@ -168,21 +205,22 @@ export default function RequestForm({ onSubmit, onCancel }) {
         onSubmit(result)
       }
 
+      // Limpiar formulario
       setFormData({
         title: "",
-        amount: "",
-        category: "",
-        description: "",
         date: "",
         department: "",
         costCenter: "",
-        vendor: "",
+      })
+      setLines([])
+      setCurrentLine({
+        category: "",
+        amount: "",
+        description: "",
       })
       setAttachments([])
     } catch (err) {
       console.error("[v0] Error creating request:", err)
-      console.error("[v0] Error response:", err.response?.data)
-      console.error("[v0] Error status:", err.response?.status)
       setError(err.response?.data?.message || "Error al crear la solicitud. Por favor intente nuevamente.")
     } finally {
       setSubmitting(false)
@@ -223,7 +261,7 @@ export default function RequestForm({ onSubmit, onCancel }) {
             fullWidth
           />
 
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" }, gap: 2 }}>
             <TextField
               label="Solicitante"
               value={loggedUser?.name || "Cargando..."}
@@ -249,34 +287,6 @@ export default function RequestForm({ onSubmit, onCancel }) {
                   </MenuItem>
                 ))}
             </TextField>
-          </Box>
-
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" }, gap: 2 }}>
-            <TextField
-              label="Monto"
-              type="number"
-              placeholder="0.00"
-              value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-              required
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <AttachMoneyIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-                inputProps: { step: "0.01" },
-              }}
-            />
-
-            <TextField
-              label="Fecha del Gasto"
-              type="date"
-              value={formData.date}
-              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-              required
-              InputLabelProps={{ shrink: true }}
-            />
 
             <TextField
               select
@@ -297,41 +307,117 @@ export default function RequestForm({ onSubmit, onCancel }) {
           </Box>
 
           <TextField
-            select
-            label="Categoría"
-            value={formData.category}
-            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+            label="Fecha del Gasto"
+            type="date"
+            value={formData.date}
+            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
             required
-            fullWidth
-          >
-            <MenuItem value="">Seleccione una categoría</MenuItem>
-            {categories
-              .filter((cat) => cat.active)
-              .map((cat) => (
-                <MenuItem key={cat.id} value={cat.name}>
-                  {cat.name}
-                </MenuItem>
-              ))}
-          </TextField>
-
-          <TextField
-            label="Proveedor / Comercio"
-            placeholder="Nombre del proveedor o comercio"
-            value={formData.vendor}
-            onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
+            InputLabelProps={{ shrink: true }}
             fullWidth
           />
 
-          <TextField
-            label="Descripción"
-            placeholder="Describa el motivo del gasto..."
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            required
-            multiline
-            rows={4}
-            fullWidth
-          />
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              Líneas de Gastos
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Agregue cada gasto individualmente
+            </Typography>
+
+            <Box
+              sx={{ display: "flex", flexDirection: "column", gap: 2, p: 3, bgcolor: "action.hover", borderRadius: 2 }}
+            >
+              <TextField
+                select
+                label="Categoría"
+                value={currentLine.category}
+                onChange={(e) => setCurrentLine({ ...currentLine, category: e.target.value })}
+                fullWidth
+              >
+                <MenuItem value="">Seleccione una categoría</MenuItem>
+                {categories
+                  .filter((cat) => cat.active)
+                  .map((cat) => (
+                    <MenuItem key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </MenuItem>
+                  ))}
+              </TextField>
+
+              <TextField
+                label="Monto"
+                type="number"
+                placeholder="0.00"
+                value={currentLine.amount}
+                onChange={(e) => setCurrentLine({ ...currentLine, amount: e.target.value })}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <AttachMoneyIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                  inputProps: { step: "0.01" },
+                }}
+                fullWidth
+              />
+
+              <TextField
+                label="Descripción"
+                placeholder="Describa el gasto..."
+                value={currentLine.description}
+                onChange={(e) => setCurrentLine({ ...currentLine, description: e.target.value })}
+                multiline
+                rows={2}
+                fullWidth
+              />
+
+              <Button variant="contained" startIcon={<AddIcon />} onClick={handleAddLine} fullWidth>
+                Agregar Línea
+              </Button>
+            </Box>
+
+            {lines.length > 0 && (
+              <TableContainer component={Paper} sx={{ mt: 3 }}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Categoría</TableCell>
+                      <TableCell align="right">Monto</TableCell>
+                      <TableCell>Descripción</TableCell>
+                      <TableCell align="center">Acciones</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {lines.map((line) => (
+                      <TableRow key={line.id}>
+                        <TableCell>{line.categoryName}</TableCell>
+                        <TableCell align="right">${Number.parseFloat(line.monto_total).toFixed(2)}</TableCell>
+                        <TableCell>{line.description}</TableCell>
+                        <TableCell align="center">
+                          <IconButton size="small" color="error" onClick={() => handleRemoveLine(line.id)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow>
+                      <TableCell colSpan={1}>
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          Total
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          ${getTotalAmount()}
+                        </Typography>
+                      </TableCell>
+                      <TableCell colSpan={2} />
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Box>
 
           <Box>
             <Typography variant="body2" sx={{ mb: 2, fontWeight: 500 }}>
@@ -396,8 +482,14 @@ export default function RequestForm({ onSubmit, onCancel }) {
           </Box>
 
           <Box sx={{ display: "flex", gap: 2, pt: 2 }}>
-            <Button type="submit" variant="contained" fullWidth size="large" disabled={submitting}>
-              {submitting ? <CircularProgress size={24} /> : "Enviar Solicitud"}
+            <Button
+              type="submit"
+              variant="contained"
+              fullWidth
+              size="large"
+              disabled={submitting || lines.length === 0}
+            >
+              {submitting ? <CircularProgress size={24} /> : `Enviar Solicitud (${lines.length} líneas)`}
             </Button>
             <Button type="button" variant="outlined" onClick={onCancel} size="large" disabled={submitting}>
               Cancelar

@@ -44,7 +44,7 @@ const customTheme = createTheme({
           paper: '#F9F9FE',
         },
         action: {
-          hover: "#0077ffd3", // Hover en light theme 
+          hover: "#ffffff64", // Hover en light theme 
           focus: 'rgba(0, 14, 169, 0.89)',
           selected: '#e9e9e9', // Gris claro en selected (light theme)
         },
@@ -57,7 +57,7 @@ const customTheme = createTheme({
           paper: '#14171acc',
         },
         action: {
-          hover: '#1176eaff',
+          hover: '#14171acc',
           focus: 'rgba(0, 14, 169, 0.89)',
           selected: '#2C2C2C', // Gris oscuro en selected (dark theme)
         },

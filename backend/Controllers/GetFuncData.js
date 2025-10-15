@@ -153,20 +153,18 @@ async function getRequestsList(req, res) {
       SELECT 
         s.id,
         CONCAT('REQ-', LPAD(s.id, 3, '0')) as requestId,
-        s.descripcion as title,
-        s.monto as amount,
+        s.titulo as title,
+        s.monto_total as amount,
         s.estado,
         s.fecha_solicitud as date,
-        s.proveedor as provider,
         u.nombre as submittedBy,
         d.nombre as department,
         cc.codigo as costCenter,
-        c.nombre as category
+        (SELECT COUNT(*) FROM solicitud_lineas WHERE solicitud_id = s.id) as lineCount
       FROM solicitudes s
       JOIN usuarios u ON s.usuario_id = u.id
       JOIN departamentos d ON s.departamento_id = d.id
-      JOIN centros_costos cc ON s.centro_costo_id = cc.id
-      JOIN categorias c ON s.categoria_id = c.id
+      LEFT JOIN centros_costos cc ON s.centro_costo_id = cc.id
       WHERE 1=1
     `;
 
@@ -184,13 +182,14 @@ async function getRequestsList(req, res) {
     }
 
     if (category && category !== "all" && category !== "undefined") {
-      query += " AND c.nombre = ?";
+      query +=
+        " AND EXISTS (SELECT 1 FROM solicitud_lineas sl JOIN categorias c ON sl.categoria_id = c.id WHERE sl.solicitud_id = s.id AND c.nombre = ?)";
       params.push(category);
     }
 
     if (search && search !== "undefined") {
       query +=
-        ' AND (s.descripcion LIKE ? OR u.nombre LIKE ? OR CONCAT("REQ-", LPAD(s.id, 3, "0")) LIKE ?)';
+        ' AND (s.titulo LIKE ? OR u.nombre LIKE ? OR CONCAT("REQ-", LPAD(s.id, 3, "0")) LIKE ?)';
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
@@ -212,7 +211,6 @@ async function getRequestsList(req, res) {
 }
 
 // GET /api/requests/:id
-// GET /api/requests/:id
 async function getRequestDetail(req, res) {
   try {
     const { id } = req.params;
@@ -222,18 +220,15 @@ async function getRequestDetail(req, res) {
       SELECT 
         s.*,
         CONCAT('REQ-', LPAD(s.id, 3, '0')) as requestId,
+        s.titulo as title,
         u.nombre as submittedBy,
         d.nombre as department,
         cc.codigo as costCenter,
-        cc.nombre as costCenterName,
-        c.nombre as category,
-        aprobador.nombre as approvedByName
+        cc.nombre as costCenterName
       FROM solicitudes s
       JOIN usuarios u ON s.usuario_id = u.id
       JOIN departamentos d ON s.departamento_id = d.id
-      JOIN centros_costos cc ON s.centro_costo_id = cc.id
-      JOIN categorias c ON s.categoria_id = c.id
-      LEFT JOIN usuarios aprobador ON s.aprobador_id = aprobador.id
+      LEFT JOIN centros_costos cc ON s.centro_costo_id = cc.id
       WHERE s.id = ?
     `,
       [id]
@@ -245,44 +240,67 @@ async function getRequestDetail(req, res) {
         .json({ success: false, message: "Solicitud no encontrada" });
     }
 
-    // Obtener archivos adjuntos
+    const [lines] = await pool.query(
+      `
+      SELECT 
+        sl.id,
+        sl.categoria_id,
+        c.nombre as category,
+        sl.monto as amount,
+        sl.descripcion as description,
+        sl.proveedor as provider,
+        sl.orden
+      FROM solicitud_lineas sl
+      JOIN categorias c ON sl.categoria_id = c.id
+      WHERE sl.solicitud_id = ?
+      ORDER BY sl.orden
+    `,
+      [id]
+    );
+
     const [attachments] = await pool.query(
       `
-      SELECT nombre_archivo, ruta_archivo, tipo_archivo, tamano
+      SELECT nombre_archivo, ruta_archivo
       FROM archivos_adjuntos
       WHERE solicitud_id = ?
     `,
       [id]
     );
 
-    const approvalHistory = [];
-    const solicitud = result[0];
-
-    if (solicitud.aprobador_id && solicitud.fecha_aprobacion) {
-      approvalHistory.push({
-        action: solicitud.estado === "Aprobada" ? "Aprobado" : "Rechazado",
-        reason: solicitud.comentario_aprobacion || "",
-        date: solicitud.fecha_aprobacion,
-        approvedBy: solicitud.approvedByName || "Usuario desconocido",
-      });
-    }
+    const [approvalHistoryResult] = await pool.query(
+      `
+      SELECT 
+        a.accion as action,
+        a.comentario as reason,
+        a.fecha_aprobacion as date,
+        u.nombre as approvedBy
+      FROM aprobaciones a
+      JOIN usuarios u ON a.aprobador_id = u.id
+      WHERE a.solicitud_id = ?
+      ORDER BY a.fecha_aprobacion DESC
+    `,
+      [id]
+    );
 
     res.json({
       success: true,
       data: {
         ...result[0],
+        lines: lines,
         attachments: attachments,
-        approvalHistory: approvalHistory,
+        approvalHistory: approvalHistoryResult,
       },
     });
   } catch (error) {
-    console.error("Error en getRequestDetail:", error);
+    console.error("[v0 Backend] Error en getRequestDetail:", error);
     res.status(500).json({
       success: false,
       message: "Error al obtener detalle de solicitud",
+      error: error.message,
     });
   }
 }
+
 // ==================== CONFIGURACIÓN ====================
 
 // GET /api/categories
@@ -381,7 +399,7 @@ async function getUsers(req, res) {
 // GET /api/reports?startDate=&endDate=&department=&category=&status=
 async function getReports(req, res) {
   try {
-    const { startDate, endDate, department, category, status } = req.query;
+    const { startDate, endDate, department, category, status } = req.query
     let query = `
       SELECT 
         s.id,
@@ -389,56 +407,55 @@ async function getReports(req, res) {
         u.nombre as requester,
         d.nombre as department,
         c.nombre as category,
-        s.descripcion as description,
-        s.monto as amount,
+        sl.descripcion as description,
+        sl.monto as amount,
         s.estado as status
       FROM solicitudes s
       JOIN usuarios u ON s.usuario_id = u.id
       JOIN departamentos d ON s.departamento_id = d.id
-      JOIN categorias c ON s.categoria_id = c.id
+      JOIN solicitud_lineas sl ON sl.solicitud_id = s.id
+      JOIN categorias c ON sl.categoria_id = c.id
       WHERE 1=1
-    `;
+    `
 
-    const params = [];
+    const params = []
 
     if (startDate) {
-      query += " AND s.fecha_solicitud >= ?";
-      params.push(startDate);
+      query += " AND s.fecha_solicitud >= ?"
+      params.push(startDate)
     }
 
     if (endDate) {
-      query += " AND s.fecha_solicitud <= ?";
-      params.push(endDate);
+      query += " AND s.fecha_solicitud <= ?"
+      params.push(endDate)
     }
 
     if (department && department !== "all") {
-      query += " AND d.nombre = ?";
-      params.push(department);
+      query += " AND d.nombre = ?"
+      params.push(department)
     }
 
     if (category && category !== "all") {
-      query += " AND c.nombre = ?";
-      params.push(category);
+      query += " AND c.nombre = ?"
+      params.push(category)
     }
 
     if (status && status !== "all") {
-      query += " AND s.estado = ?";
-      params.push(status);
+      query += " AND s.estado = ?"
+      params.push(status)
     }
 
-    query += " ORDER BY s.fecha_solicitud DESC";
+    query += " ORDER BY s.fecha_solicitud DESC"
 
-    const [result] = await pool.query(query, params);
+    const [result] = await pool.query(query, params)
 
     res.json({
       success: true,
       data: result,
-    });
+    })
   } catch (error) {
-    console.error("Error en getReports:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Error al obtener reportes" });
+    console.error("Error en getReports:", error)
+    res.status(500).json({ success: false, message: "Error al obtener reportes" })
   }
 }
 

@@ -21,6 +21,8 @@ import {
   FormControl,
   InputLabel,
   Chip,
+  Collapse,
+  IconButton,
 } from "@mui/material"
 import {
   FileDownload as FileDownloadIcon,
@@ -28,6 +30,8 @@ import {
   TrendingUp as TrendingUpIcon,
   Receipt as ReceiptIcon,
   AttachMoney as AttachMoneyIcon,
+  KeyboardArrowDown as KeyboardArrowDownIcon,
+  KeyboardArrowUp as KeyboardArrowUpIcon,
 } from "@mui/icons-material"
 import Chart from "react-apexcharts"
 import apiService from "../api/apiService"
@@ -45,6 +49,7 @@ export default function Reports() {
   const [loading, setLoading] = useState(false)
   const [departments, setDepartments] = useState([])
   const [categories, setCategories] = useState([])
+  const [expandedRows, setExpandedRows] = useState({})
 
   const statuses = ["Pendiente", "Aprobada", "Rechazada"]
 
@@ -77,8 +82,48 @@ export default function Reports() {
       const response = await apiService.getReports(filters)
 
       if (response.success) {
-        setReportData(response.data)
+        const groupedData = response.data.reduce((acc, row) => {
+          const existingRequest = acc.find((r) => r.id === row.id)
+
+          if (existingRequest) {
+            // Add line to existing request
+            existingRequest.lines.push({
+              id: row.lineId,
+              category: row.category,
+              description: row.description,
+              amount: row.amount,
+            })
+          } else {
+            // Create new request with first line
+            acc.push({
+              id: row.id,
+              date: row.date,
+              requester: row.requester,
+              department: row.department,
+              status: row.status,
+              totalAmount: row.totalAmount || 0,
+              lines: [
+                {
+                  id: row.lineId,
+                  category: row.category,
+                  description: row.description,
+                  amount: row.amount,
+                },
+              ],
+            })
+          }
+
+          return acc
+        }, [])
+
+        // Calculate total amount for each request
+        groupedData.forEach((request) => {
+          request.totalAmount = request.lines.reduce((sum, line) => sum + Number(line.amount || 0), 0)
+        })
+
+        setReportData(groupedData)
         setShowResults(true)
+        setExpandedRows({})
       }
     } catch (error) {
       console.error("Error generating report:", error)
@@ -88,21 +133,34 @@ export default function Reports() {
     }
   }
 
+  const toggleRow = (requestId) => {
+    setExpandedRows((prev) => ({
+      ...prev,
+      [requestId]: !prev[requestId],
+    }))
+  }
+
   const exportToExcel = () => {
-    const csvContent = [
-      ["Fecha", "Solicitante", "Departamento", "Categoría", "Monto", "Estado", "Descripción"],
-      ...reportData.map((row) => [
-        row.date,
-        row.requester,
-        row.department,
-        row.category,
-        row.amount,
-        row.status,
-        row.description,
-      ]),
+    const csvRows = [
+      ["Fecha", "Solicitante", "Departamento", "Monto Total", "Estado", "Categoría", "Descripción", "Monto Línea"],
     ]
-      .map((row) => row.join(","))
-      .join("\n")
+
+    reportData.forEach((request) => {
+      request.lines.forEach((line) => {
+        csvRows.push([
+          request.date,
+          request.requester,
+          request.department,
+          request.totalAmount,
+          request.status,
+          line.category,
+          line.description,
+          line.amount,
+        ])
+      })
+    })
+
+    const csvContent = csvRows.map((row) => row.join(",")).join("\n")
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
     const link = document.createElement("a")
@@ -125,14 +183,19 @@ export default function Reports() {
     })
     setShowResults(false)
     setReportData([])
+    setExpandedRows({})
   }
 
-  const totalAmount = reportData.reduce((sum, item) => sum + Number(item.amount), 0)
+  const totalAmount = reportData.reduce((sum, item) => sum + Number(item.totalAmount), 0)
   const totalRequests = reportData.length
   const averageAmount = totalRequests > 0 ? totalAmount / totalRequests : 0
 
-  const categoryData = reportData.reduce((acc, item) => {
-    acc[item.category] = (acc[item.category] || 0) + Number(item.amount)
+  const categoryData = reportData.reduce((acc, request) => {
+    if (request.lines && Array.isArray(request.lines)) {
+      request.lines.forEach((line) => {
+        acc[line.category] = (acc[line.category] || 0) + Number(line.amount || 0)
+      })
+    }
     return acc
   }, {})
 
@@ -370,13 +433,12 @@ export default function Reports() {
                 <Table>
                   <TableHead>
                     <TableRow sx={{ backgroundColor: "grey.100" }}>
+                      <TableCell sx={{ fontWeight: 600, width: 50 }} />
                       <TableCell sx={{ fontWeight: 600 }}>Fecha</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>Solicitante</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>Departamento</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Categoría</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Descripción</TableCell>
                       <TableCell sx={{ fontWeight: 600 }} align="right">
-                        Monto
+                        Monto Total
                       </TableCell>
                       <TableCell sx={{ fontWeight: 600 }} align="center">
                         Estado
@@ -386,27 +448,71 @@ export default function Reports() {
                   <TableBody>
                     {reportData.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                        <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                           <Typography color="text.secondary">
                             No se encontraron resultados con los filtros seleccionados
                           </Typography>
                         </TableCell>
                       </TableRow>
                     ) : (
-                      reportData.map((row) => (
-                        <TableRow key={row.id} hover>
-                          <TableCell>{row.date}</TableCell>
-                          <TableCell>{row.requester}</TableCell>
-                          <TableCell>{row.department}</TableCell>
-                          <TableCell>{row.category}</TableCell>
-                          <TableCell>{row.description}</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 600 }}>
-                            ${row.amount.toLocaleString()}
-                          </TableCell>
-                          <TableCell align="center">
-                            <Chip label={row.status} color={getStatusColor(row.status)} size="small" />
-                          </TableCell>
-                        </TableRow>
+                      reportData.map((request) => (
+                        <>
+                          <TableRow key={request.id} hover sx={{ cursor: "pointer" }}>
+                            <TableCell>
+                              <IconButton size="small" onClick={() => toggleRow(request.id)}>
+                                {expandedRows[request.id] ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                              </IconButton>
+                            </TableCell>
+                            <TableCell onClick={() => toggleRow(request.id)}>
+                              {new Date(request.date).toLocaleDateString("es-ES", {
+                                year: "numeric",
+                                month: "2-digit",
+                                day: "2-digit",
+                              })}
+                            </TableCell>
+                            <TableCell onClick={() => toggleRow(request.id)}>{request.requester}</TableCell>
+                            <TableCell onClick={() => toggleRow(request.id)}>{request.department}</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600 }} onClick={() => toggleRow(request.id)}>
+                              ${Number(request.totalAmount).toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                            </TableCell>
+                            <TableCell align="center" onClick={() => toggleRow(request.id)}>
+                              <Chip label={request.status} color={getStatusColor(request.status)} size="small" />
+                            </TableCell>
+                          </TableRow>
+                          <TableRow key={`collapse-${request.id}`}>
+                            <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
+                              <Collapse in={expandedRows[request.id]} timeout="auto" unmountOnExit>
+                                <Box sx={{ margin: 2 }}>
+                                  <Typography variant="h6" gutterBottom component="div" sx={{ mb: 2 }}>
+                                    Líneas de Gasto
+                                  </Typography>
+                                  <Table size="small">
+                                    <TableHead>
+                                      <TableRow sx={{ backgroundColor: "grey.50" }}>
+                                        <TableCell sx={{ fontWeight: 600 }}>Categoría</TableCell>
+                                        <TableCell sx={{ fontWeight: 600 }}>Descripción</TableCell>
+                                        <TableCell sx={{ fontWeight: 600 }} align="right">
+                                          Monto
+                                        </TableCell>
+                                      </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                      {request.lines.map((line) => (
+                                        <TableRow key={line.id}>
+                                          <TableCell>{line.category}</TableCell>
+                                          <TableCell>{line.description}</TableCell>
+                                          <TableCell align="right" sx={{ fontWeight: 500 }}>
+                                            ${Number(line.amount).toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </Box>
+                              </Collapse>
+                            </TableCell>
+                          </TableRow>
+                        </>
                       ))
                     )}
                   </TableBody>

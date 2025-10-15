@@ -20,6 +20,13 @@ import {
   Grid,
   Alert,
   CircularProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton,
 } from "@mui/material";
 import {
   Search as SearchIcon,
@@ -34,6 +41,9 @@ import {
   Close as CloseIcon,
   Check as CheckIcon,
   Clear as ClearIcon,
+  Edit as EditIcon,
+  Save as SaveIcon,
+  ShoppingCart as ShoppingCartIcon,
 } from "@mui/icons-material";
 import apiService from "../api/apiService";
 export default function RequestsList({ requests }) {
@@ -53,6 +63,9 @@ export default function RequestsList({ requests }) {
 
   const [categories, setCategories] = useState([]);
 
+  const [editingLineId, setEditingLineId] = useState(null);
+  const [editingProvider, setEditingProvider] = useState("");
+
   const fetchCategories = async () => {
     try {
       const data = await apiService.getCategories();
@@ -62,14 +75,9 @@ export default function RequestsList({ requests }) {
       } else if (data && Array.isArray(data.data)) {
         setCategories(data.data);
       } else {
-        console.error(
-          "[v0] ===== Categories response is NOT an array =====",
-          data
-        );
         setCategories([]);
       }
     } catch (err) {
-      console.error("[v0] ===== ERROR fetching categories =====", err);
       setCategories([]);
     }
   };
@@ -131,7 +139,7 @@ export default function RequestsList({ requests }) {
 
   const filteredRequests = requestsList.filter((req) => {
     const matchesSearch =
-      (req.title || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (req.titulo || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(req.id).toLowerCase().includes(searchTerm.toLowerCase()) ||
       (req.submittedBy || "").toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSearch;
@@ -146,6 +154,8 @@ export default function RequestsList({ requests }) {
       setComments("");
       setShowConfirmation(false);
       setActionType(null);
+      setEditingLineId(null);
+      setEditingProvider("");
     } catch (err) {
       console.error("[v0] Error fetching request details:", err);
       alert("Error al cargar los detalles de la solicitud");
@@ -158,6 +168,8 @@ export default function RequestsList({ requests }) {
     setComments("");
     setShowConfirmation(false);
     setActionType(null);
+    setEditingLineId(null);
+    setEditingProvider("");
   };
 
   const handleActionClick = (type) => {
@@ -197,6 +209,43 @@ export default function RequestsList({ requests }) {
   const handleCancelAction = () => {
     setShowConfirmation(false);
     setActionType(null);
+  };
+
+  const handleEditLine = (line) => {
+    setEditingLineId(line.id);
+    setEditingProvider(line.proveedor || "");
+  };
+
+  const handleSaveLineProvider = async (lineId) => {
+    try {
+      await apiService.updateLineProvider(lineId, editingProvider);
+
+      // Refresh request details
+      const fullRequest = await apiService.getRequestDetail(selectedRequest.id);
+      setSelectedRequest(fullRequest.data);
+
+      setEditingLineId(null);
+      setEditingProvider("");
+      alert("Proveedor actualizado exitosamente");
+    } catch (err) {
+      console.error("[v0] Error updating provider:", err);
+      alert("Error al actualizar el proveedor");
+    }
+  };
+
+  const handleGeneratePurchaseOrder = () => {
+    // Check if all lines have providers
+    const allLinesHaveProvider = selectedRequest.lines?.every(
+      (line) => line.proveedor
+    );
+
+    if (!allLinesHaveProvider) {
+      alert("Todas las líneas deben tener un proveedor asignado");
+      return;
+    }
+
+    // TODO: Call API to generate purchase order
+    alert("Orden de compra generada exitosamente");
   };
 
   if (loading) {
@@ -389,7 +438,7 @@ export default function RequestsList({ requests }) {
                       fontWeight={600}
                       sx={{ mb: 0.5 }}
                     >
-                      {request.title || "Sin título"}
+                      {request.titulo || "Sin título"}
                     </Typography>
                     <Box
                       sx={{
@@ -419,11 +468,6 @@ export default function RequestsList({ requests }) {
                           {new Date(request.date).toLocaleDateString("es-ES")}
                         </Typography>
                       </Box>
-                      <Chip
-                        label={request.category}
-                        variant="outlined"
-                        size="small"
-                      />
                       {request.attachments &&
                         request.attachments.length > 0 && (
                           <Box
@@ -453,10 +497,11 @@ export default function RequestsList({ requests }) {
                       >
                         <AttachMoneyIcon sx={{ fontSize: 18 }} />
                         <Typography variant="h6" fontWeight={700}>
-                          {Number.parseFloat(request.amount).toLocaleString(
-                            "es-ES",
-                            { minimumFractionDigits: 2 }
-                          )}
+                          {Number.parseFloat(
+                            request.amount || 0
+                          ).toLocaleString("es-ES", {
+                            minimumFractionDigits: 2,
+                          })}
                         </Typography>
                       </Box>
                     </Box>
@@ -487,7 +532,7 @@ export default function RequestsList({ requests }) {
       <Dialog
         open={openDialog}
         onClose={handleCloseDialog}
-        maxWidth="md"
+        maxWidth="lg"
         fullWidth
       >
         {selectedRequest && (
@@ -502,14 +547,15 @@ export default function RequestsList({ requests }) {
               >
                 <Box>
                   <Typography variant="h6" fontWeight={600}>
-                    Detalle de Solicitud
+                    {selectedRequest.titulo || "Sin título"}
                   </Typography>
                   <Typography
                     variant="caption"
                     color="text.secondary"
                     sx={{ fontFamily: "monospace" }}
                   >
-                    {selectedRequest.id}
+                    {selectedRequest.requestId ||
+                      `REQ-${String(selectedRequest.id).padStart(3, "0")}`}
                   </Typography>
                 </Box>
                 <Chip
@@ -557,55 +603,135 @@ export default function RequestsList({ requests }) {
                     color="text.secondary"
                     gutterBottom
                   >
-                    Título
+                    Líneas de Gastos
                   </Typography>
-                  <Typography variant="body1" fontWeight={600}>
-                    {selectedRequest.descripcion || "Sin título"}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={12}>
-                  <Divider />
-                </Grid>
-
-                <Grid item xs={6}>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1,
-                      mb: 1,
-                    }}
-                  >
-                    <AttachMoneyIcon color="primary" />
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Monto
-                    </Typography>
-                  </Box>
-                  <Typography variant="h5" fontWeight={700} color="primary">
-                    $
-                    {selectedRequest.monto
-                      ? Number.parseFloat(selectedRequest.monto).toLocaleString(
-                          "es-ES",
-                          { minimumFractionDigits: 2 }
-                        )
-                      : "0.00"}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={6}>
-                  <Typography
-                    variant="subtitle2"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    Categoría
-                  </Typography>
-                  <Chip
-                    label={selectedRequest.category}
-                    color="primary"
+                  <TableContainer
+                    component={Paper}
                     variant="outlined"
-                  />
+                    sx={{ mt: 1 }}
+                  >
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>
+                            <strong>Categoría</strong>
+                          </TableCell>
+                          <TableCell align="right">
+                            <strong>Monto</strong>
+                          </TableCell>
+                          <TableCell>
+                            <strong>Descripción</strong>
+                          </TableCell>
+                          <TableCell>
+                            <strong>Proveedor</strong>
+                          </TableCell>
+                          {selectedRequest.estado === "Aprobada" && (
+                            <TableCell align="center">
+                              <strong>Acciones</strong>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {selectedRequest.lines &&
+                        selectedRequest.lines.length > 0 ? (
+                          selectedRequest.lines.map((line) => (
+                            <TableRow key={line.id}>
+                              <TableCell>{line.category}</TableCell>
+                              <TableCell align="right">
+                                $
+                                {Number.parseFloat(line.amount).toLocaleString(
+                                  "es-ES",
+                                  { minimumFractionDigits: 2 }
+                                )}
+                              </TableCell>
+                              <TableCell>{line.description}</TableCell>
+                              <TableCell>
+                                {editingLineId === line.id ? (
+                                  <TextField
+                                    size="small"
+                                    value={editingProvider}
+                                    onChange={(e) =>
+                                      setEditingProvider(e.target.value)
+                                    }
+                                    placeholder="Nombre del proveedor"
+                                    fullWidth
+                                  />
+                                ) : (
+                                  line.provider || (
+                                    <em style={{ color: "#999" }}>
+                                      Sin asignar
+                                    </em>
+                                  )
+                                )}
+                              </TableCell>
+                              {selectedRequest.estado === "Aprobada" && (
+                                <TableCell align="center">
+                                  {editingLineId === line.id ? (
+                                    <IconButton
+                                      size="small"
+                                      color="primary"
+                                      onClick={() =>
+                                        handleSaveLineProvider(line.id)
+                                      }
+                                    >
+                                      <SaveIcon fontSize="small" />
+                                    </IconButton>
+                                  ) : (
+                                    <IconButton
+                                      size="small"
+                                      color="primary"
+                                      onClick={() => handleEditLine(line)}
+                                    >
+                                      <EditIcon fontSize="small" />
+                                    </IconButton>
+                                  )}
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell
+                              colSpan={
+                                selectedRequest.estado === "Aprobada" ? 5 : 4
+                              }
+                              align="center"
+                            >
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                              >
+                                No hay líneas de gastos
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        {selectedRequest.lines &&
+                          selectedRequest.lines.length > 0 && (
+                            <TableRow>
+                              <TableCell colSpan={2} align="right">
+                                <strong>Total:</strong>
+                              </TableCell>
+                              <TableCell
+                                colSpan={
+                                  selectedRequest.estado === "Aprobada" ? 3 : 2
+                                }
+                              >
+                                <strong>
+                                  $
+                                  {Number.parseFloat(
+                                    selectedRequest.monto_total || 0
+                                  ).toLocaleString("es-ES", {
+                                    minimumFractionDigits: 2,
+                                  })}
+                                </strong>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
                 </Grid>
 
                 <Grid item xs={12}>
@@ -664,19 +790,6 @@ export default function RequestsList({ requests }) {
                 </Grid>
 
                 <Grid item xs={6}>
-                  <Typography
-                    variant="subtitle2"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    Proveedor
-                  </Typography>
-                  <Typography variant="body1">
-                    {selectedRequest.proveedor || "N/A"}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={6}>
                   <Box
                     sx={{
                       display: "flex",
@@ -691,13 +804,14 @@ export default function RequestsList({ requests }) {
                     </Typography>
                   </Box>
                   <Typography variant="body1">
-                    {new Date(
-                      selectedRequest.fecha_solicitud
-                    ).toLocaleDateString("es-ES", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
+                    {new Date(selectedRequest.fecha_solicitud).toLocaleDateString(
+                      "es-ES",
+                      {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      }
+                    )}
                   </Typography>
                 </Grid>
 
@@ -750,19 +864,12 @@ export default function RequestsList({ requests }) {
                               <Typography variant="body2" fontWeight={500}>
                                 {file.nombre_archivo}
                               </Typography>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {file.tipo_archivo} •{" "}
-                                {(file.tamano / 1024).toFixed(2)} KB
-                              </Typography>
                             </Box>
                           </Box>
                           <Button
                             size="small"
                             startIcon={<DownloadIcon />}
-                            href={file.ruta_archivo}
+                            href={file.url_archivo}
                             target="_blank"
                             rel="noopener noreferrer"
                           >
@@ -834,13 +941,8 @@ export default function RequestsList({ requests }) {
                                 {history.approvedBy}
                               </Typography>
                               {history.reason && (
-                                <Typography
-                                  variant="caption"
-                                  display="block"
-                                  color="error"
-                                  sx={{ mt: 0.5 }}
-                                >
-                                  Motivo: {history.reason}
+                                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                                  {history.reason}
                                 </Typography>
                               )}
                             </Box>
@@ -895,6 +997,17 @@ export default function RequestsList({ requests }) {
               </Grid>
             </DialogContent>
             <DialogActions sx={{ p: 2, gap: 1 }}>
+              {selectedRequest.estado === "Aprobada" && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<ShoppingCartIcon />}
+                  onClick={handleGeneratePurchaseOrder}
+                >
+                  Generar Orden de Compra
+                </Button>
+              )}
+
               {(selectedRequest?.estado === "Pendiente" ||
                 selectedRequest?.estado === "pending") &&
                 !showConfirmation && (

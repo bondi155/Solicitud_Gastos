@@ -41,7 +41,7 @@ function authenticateToken(req, res, next) {
 //limitador de tasa contra ddos
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100, // limita cada ip a 100 request
+  max: 500, // limita cada ip a 500 request
 });
 
 //limitador de tasa a todas las rutas
@@ -127,7 +127,8 @@ app.get("/api/reports", authenticateToken, GetDataController.getReports)
 app.post('/loginUsers', authenticateToken, PostDataController.loginUsers__); // Login para obtener el token
 app.put('/resetPass', authenticateToken, PostDataController.resetPassword__); // Reseteo password
 
-
+// Actualizar proveedor de línea de solicitud
+app.post("/api/request-lines/:id/provider", authenticateToken, PostDataController.updateLineProvider)
 
 
 app.listen(port, () => {
