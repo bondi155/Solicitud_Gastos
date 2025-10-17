@@ -49,7 +49,7 @@ app.use(limiter);
 
 const allowedOrigins = [
   'http://localhost:3000',
-  'https://cambiar.onrender.com'
+  'https://solicitudesexportadoracafecalifornia.onrender.com'
 ];
 
 app.use(cors({
