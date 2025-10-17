@@ -657,23 +657,23 @@ async function createUser(req, res) {
   try {
     const { name, email, role, department, password } = req.body;
 
-    if (!name || !email || !role || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Nombre, email, rol y contraseña son requeridos",
-      });
+    if (!name || !email || !role) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Nombre, email y rol son requeridos",
+        });
     }
 
-    // Validar longitud mínima de contraseña
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: "La contraseña debe tener al menos 6 caracteres",
-      });
+    if (!password || password.length < 6) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "La contraseña debe tener al menos 6 caracteres",
+        });
     }
-
-    // Hashear la contraseña
-    const passwordHash = await bcrypt.hash(password, saltRounds);
 
     // Obtener ID del departamento
     const [deptData] = await pool.query(
@@ -681,15 +681,19 @@ async function createUser(req, res) {
       [department]
     );
 
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     const [result] = await pool.query(
-      `INSERT INTO usuarios (nombre, email, rol, departamento_id, password_hash, activo)
-       VALUES (?, ?, ?, ?, ?, 1)`,
+      `
+      INSERT INTO usuarios (nombre, email, password_hash, rol, departamento_id, activo)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `,
       [
         name,
         email,
+        hashedPassword,
         role,
         deptData.length > 0 ? deptData[0].id : null,
-        passwordHash,
       ]
     );
 
@@ -700,15 +704,13 @@ async function createUser(req, res) {
     });
   } catch (error) {
     console.error("Error en createUser:", error);
-
-    if (error.code === "ER_DUP_ENTRY") {
-      return res.status(400).json({
+    console.error("Error details:", error.message);
+    res
+      .status(500)
+      .json({
         success: false,
-        message: "Este email ya está registrado",
+        message: "Error al crear usuario: " + error.message,
       });
-    }
-
-    res.status(500).json({ success: false, message: "Error al crear usuario" });
   }
 }
 

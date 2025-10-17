@@ -406,7 +406,7 @@ export default function Configuration() {
               >
                 <MenuItem value="Solicitante">Solicitante</MenuItem>
                 <MenuItem value="Aprobador">Aprobador</MenuItem>
-                <MenuItem value="Administrador">Administrador</MenuItem>
+                <MenuItem value="Admin">Administrador</MenuItem>
               </Select>
             </FormControl>
             <FormControl fullWidth margin="normal" required>
