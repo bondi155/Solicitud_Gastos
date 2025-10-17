@@ -16,7 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import '../CSS/App.css';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
-import UserConfig from '../Routes/UserConfig';
+//import UserConfig from '../Routes/UserConfig';
 //import CustomMenu from './CustomMenu';
 import { MenuItem, Stack, Divider, ListItemIcon } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -164,7 +164,6 @@ function DemoPageContent({ pathname }) {
       {pathname === '/Solicitud' && <Solicitud />}
       {pathname === '/Reportes' && <ReportesContainer />}
       {pathname === '/ConfigContainer' && <ConfigContainer />}
-      {pathname === '/userConfig' && <UserConfig />}
     </Box>
   );
 }

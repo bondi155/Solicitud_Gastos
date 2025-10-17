@@ -7,7 +7,6 @@ import Dashboard from './Components/Dashboard';
 import { AuthProvider } from './Components/AuthContext';
 import SetupInterceptors from './Components/SetupInterceptors';
 import AuthInitializer from './Components/AuthInitializer';
-import UserConfig from './Routes/UserConfig';
 import Solicitud from './Routes/Solicitud';
 import ListaSolContainer from './Routes/ListaSolContainer';
 import ReportesContainer from './Routes/ReportesContainer';
@@ -29,8 +28,6 @@ function App() {
               <Route path='Solicitud' element={<Solicitud />} />
               <Route index element={<Navigate replace to='ListaSolContainer' />} />
               <Route path='ListaSolContainer' element={<ListaSolContainer />} />
-              <Route index element={<Navigate replace to='userConfig' />} />
-              <Route path='userConfig' element={<UserConfig />} />
                <Route index element={<Navigate replace to='ReportesContainer' />} />
               <Route path='ReportesContainer' element={<ReportesContainer />} />
                <Route index element={<Navigate replace to='ConfigContainer' />} />
