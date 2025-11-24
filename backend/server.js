@@ -5,7 +5,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const app = express();
 app.set('trust proxy', 1);
-const port = process.env.PORT || 5011;
+const port = process.env.PORT || 5028;
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const GetDataController = require('./Controllers/GetFuncData');
@@ -47,28 +47,10 @@ const limiter = rateLimit({
 //limitador de tasa a todas las rutas
 app.use(limiter);
 
-const allowedOrigins = [
-  'http://localhost:3000',
-  'https://solicitudesexportadoracafecalifornia.onrender.com'
-];
 
-app.use(cors({
-  origin: function(origin, callback) {
-    // permite requests sin origen (como mobile apps o curl)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'El origen CORS no está permitido.';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-}));
+
+app.use(cors({}));
+
 app.use(express.json());
 
 // Rate limiter específico para barra de progreso
