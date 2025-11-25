@@ -213,26 +213,47 @@ async function createRequest(req, res) {
 }
 // POST /api/requests/:id/approve
 async function approveRequest(req, res) {
-  const connection = await pool.getConnection();
+  let connection;
 
   try {
+    connection = await pool.getConnection();
     await connection.beginTransaction();
 
     const { id } = req.params;
     const { comments, approverId } = req.body;
 
+    console.log(`[v0] Aprobando solicitud ${id} - approverId: ${approverId}`);
+
+    if (!approverId) {
+      await connection.rollback();
+      connection.release();
+      return res.status(400).json({
+        success: false,
+        message: "El ID del aprobador es requerido",
+      });
+    }
+
     // Actualizar estado de la solicitud
-    await connection.query(
-      `UPDATE solicitudes 
-       SET estado = 'Aprobada', 
+    const [updateResult] = await connection.query(
+      `UPDATE solicitudes
+       SET estado = 'Aprobada',
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [id]
     );
 
+    if (updateResult.affectedRows === 0) {
+      await connection.rollback();
+      connection.release();
+      return res.status(404).json({
+        success: false,
+        message: "Solicitud no encontrada",
+      });
+    }
+
     // Insertar en tabla aprobaciones
     await connection.query(
-      `INSERT INTO aprobaciones 
+      `INSERT INTO aprobaciones
        (solicitud_id, aprobador_id, accion, comentario, fecha_aprobacion)
        VALUES (?, ?, 'Aprobada', ?, CURRENT_TIMESTAMP)`,
       [id, approverId, comments || null]
@@ -241,29 +262,41 @@ async function approveRequest(req, res) {
     await connection.commit();
     connection.release();
 
+    console.log(`[v0] Solicitud ${id} aprobada exitosamente`);
     res.json({
       success: true,
       message: "Solicitud aprobada exitosamente",
     });
   } catch (error) {
-    await connection.rollback();
-    connection.release();
-    console.error("Error en approveRequest:", error);
+    if (connection) {
+      await connection.rollback();
+      connection.release();
+    }
+    console.error("[v0] Error en approveRequest:", error);
+    console.error("Error details:", error.message);
+    console.error("Stack trace:", error.stack);
     res
       .status(500)
-      .json({ success: false, message: "Error al aprobar solicitud" });
+      .json({
+        success: false,
+        message: "Error al aprobar solicitud",
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
   }
 }
 
 // POST /api/requests/:id/reject
 async function rejectRequest(req, res) {
-  const connection = await pool.getConnection();
+  let connection;
 
   try {
+    connection = await pool.getConnection();
     await connection.beginTransaction();
 
     const { id } = req.params;
     const { comments, approverId } = req.body;
+
+    console.log(`[v0] Rechazando solicitud ${id} - approverId: ${approverId}`);
 
     if (!comments) {
       await connection.rollback();
@@ -274,18 +307,36 @@ async function rejectRequest(req, res) {
       });
     }
 
+    if (!approverId) {
+      await connection.rollback();
+      connection.release();
+      return res.status(400).json({
+        success: false,
+        message: "El ID del aprobador es requerido",
+      });
+    }
+
     // Actualizar estado de la solicitud
-    await connection.query(
-      `UPDATE solicitudes 
+    const [updateResult] = await connection.query(
+      `UPDATE solicitudes
        SET estado = 'Rechazada',
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [id]
     );
 
+    if (updateResult.affectedRows === 0) {
+      await connection.rollback();
+      connection.release();
+      return res.status(404).json({
+        success: false,
+        message: "Solicitud no encontrada",
+      });
+    }
+
     // Insertar en tabla aprobaciones
     await connection.query(
-      `INSERT INTO aprobaciones 
+      `INSERT INTO aprobaciones
        (solicitud_id, aprobador_id, accion, comentario, fecha_aprobacion)
        VALUES (?, ?, 'Rechazada', ?, CURRENT_TIMESTAMP)`,
       [id, approverId, comments]
@@ -294,17 +345,26 @@ async function rejectRequest(req, res) {
     await connection.commit();
     connection.release();
 
+    console.log(`[v0] Solicitud ${id} rechazada exitosamente`);
     res.json({
       success: true,
       message: "Solicitud rechazada exitosamente",
     });
   } catch (error) {
-    await connection.rollback();
-    connection.release();
-    console.error("Error en rejectRequest:", error);
+    if (connection) {
+      await connection.rollback();
+      connection.release();
+    }
+    console.error("[v0] Error en rejectRequest:", error);
+    console.error("Error details:", error.message);
+    console.error("Stack trace:", error.stack);
     res
       .status(500)
-      .json({ success: false, message: "Error al rechazar solicitud" });
+      .json({
+        success: false,
+        message: "Error al rechazar solicitud",
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
   }
 }
 // GET /api/requests/:id

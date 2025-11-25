@@ -49,7 +49,23 @@ app.use(limiter);
 
 
 
-app.use(cors({}));
+// Configuración CORS
+const corsOptions = {
+  origin: [
+    'https://solicitudesexportadoracafecalifornia.onrender.com',
+    'http://localhost:3000',
+    'http://localhost:3001'
+  ],
+  credentials: true,
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
+
+// Manejar preflight requests explícitamente
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
 
@@ -113,6 +129,34 @@ app.put('/resetPass', authenticateToken, PostDataController.resetPassword__); //
 app.post("/api/request-lines/:id/provider", authenticateToken, PostDataController.updateLineProvider)
 
 
-app.listen(port, () => {
-  console.log('servidor funcionando en el puerto ' + port);
-});
+// Verificar conexión a la base de datos al iniciar
+const mysql = require('mysql2');
+async function verifyDatabaseConnection() {
+  try {
+    const pool = mysql.createPool(process.env.DATABASE_URL).promise();
+    await pool.query('SELECT 1');
+    console.log('✓ Conexión a base de datos exitosa');
+    return true;
+  } catch (error) {
+    console.error('✗ Error al conectar a la base de datos:', error.message);
+    console.error('DATABASE_URL:', process.env.DATABASE_URL ? 'configurada' : 'NO CONFIGURADA');
+    return false;
+  }
+}
+
+// Iniciar servidor con verificaciones
+async function startServer() {
+  const dbConnected = await verifyDatabaseConnection();
+
+  if (!dbConnected) {
+    console.error('⚠ Advertencia: El servidor iniciará pero la BD no está disponible');
+  }
+
+  app.listen(port, () => {
+    console.log(`✓ Servidor funcionando en puerto ${port}`);
+    console.log(`✓ CORS habilitado para frontend`);
+    console.log(`✓ Modo: ${process.env.NODE_ENV || 'development'}`);
+  });
+}
+
+startServer();
