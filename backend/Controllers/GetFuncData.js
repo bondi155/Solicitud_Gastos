@@ -318,9 +318,15 @@ async function getCategories(req, res) {
     });
   } catch (error) {
     console.error("Error en getCategories:", error);
+    console.error("Error details:", error.message);
+    console.error("Stack trace:", error.stack);
     res
       .status(500)
-      .json({ success: false, message: "Error al obtener categorías" });
+      .json({
+        success: false,
+        message: "Error al obtener categorías",
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
   }
 }
 
@@ -360,9 +366,15 @@ async function getCostCenters(req, res) {
     });
   } catch (error) {
     console.error("Error en getCostCenters:", error);
+    console.error("Error details:", error.message);
+    console.error("Stack trace:", error.stack);
     res
       .status(500)
-      .json({ success: false, message: "Error al obtener centros de costos" });
+      .json({
+        success: false,
+        message: "Error al obtener centros de costos",
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
   }
 }
 
