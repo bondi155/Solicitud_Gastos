@@ -391,7 +391,7 @@ export default function RequestForm({ onSubmit, onCancel }) {
                     {lines.map((line) => (
                       <TableRow key={line.id}>
                         <TableCell>{line.categoryName}</TableCell>
-                        <TableCell align="right">${Number.parseFloat(line.monto_total).toFixed(2)}</TableCell>
+                        <TableCell align="right">${Number.parseFloat(line.amount).toFixed(2)}</TableCell>
                         <TableCell>{line.description}</TableCell>
                         <TableCell align="center">
                           <IconButton size="small" color="error" onClick={() => handleRemoveLine(line.id)}>
