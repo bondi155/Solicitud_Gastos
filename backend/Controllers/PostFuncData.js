@@ -833,6 +833,163 @@ async function deleteUser(req, res) {
   }
 }
 
+// ==================== ORDEN DE COMPRA ====================
+
+// PUT /api/requests/:id/purchase-order
+async function updatePurchaseOrderInfo(req, res) {
+  try {
+    const { id } = req.params;
+    const {
+      fecha_entrega_requerida,
+      direccion_entrega,
+      responsable_recepcion,
+      telefono_responsable,
+      instrucciones_especiales,
+      subtotal,
+      iva,
+      otros_impuestos,
+      descuentos,
+      total_con_impuestos,
+      condiciones_pago,
+      metodo_pago,
+      dias_credito,
+      estatus_entrega,
+      moneda,
+      tipo_cambio,
+    } = req.body;
+
+    const [result] = await pool.query(
+      `UPDATE solicitudes SET
+        fecha_entrega_requerida = ?,
+        direccion_entrega = ?,
+        responsable_recepcion = ?,
+        telefono_responsable = ?,
+        instrucciones_especiales = ?,
+        subtotal = ?,
+        iva = ?,
+        otros_impuestos = ?,
+        descuentos = ?,
+        total_con_impuestos = ?,
+        condiciones_pago = ?,
+        metodo_pago = ?,
+        dias_credito = ?,
+        estatus_entrega = ?,
+        moneda = ?,
+        tipo_cambio = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND estado = 'Aprobada'`,
+      [
+        fecha_entrega_requerida || null,
+        direccion_entrega || null,
+        responsable_recepcion || null,
+        telefono_responsable || null,
+        instrucciones_especiales || null,
+        subtotal || 0,
+        iva || 0,
+        otros_impuestos || 0,
+        descuentos || 0,
+        total_con_impuestos || 0,
+        condiciones_pago || null,
+        metodo_pago || null,
+        dias_credito || 0,
+        estatus_entrega || 'Pendiente',
+        moneda || 'MXN',
+        tipo_cambio || 1.0,
+        id,
+      ]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Solicitud no encontrada o no está aprobada",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Información de orden de compra actualizada exitosamente",
+    });
+  } catch (error) {
+    console.error("[v0] Error en updatePurchaseOrderInfo:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error al actualizar información de orden de compra",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+}
+
+// PUT /api/request-lines/:id
+async function updateRequestLine(req, res) {
+  try {
+    const { id } = req.params;
+    const {
+      sku,
+      codigo_proveedor,
+      cantidad,
+      unidad_medida,
+      precio_unitario,
+      proveedor_id,
+      proveedor,
+      notas_linea,
+    } = req.body;
+
+    // Calcular importe y subtotal
+    const cant = parseFloat(cantidad) || 0;
+    const precio = parseFloat(precio_unitario) || 0;
+    const importe = cant * precio;
+    const subtotal_linea = importe;
+
+    const [result] = await pool.query(
+      `UPDATE solicitud_lineas SET
+        sku = ?,
+        codigo_proveedor = ?,
+        cantidad = ?,
+        unidad_medida = ?,
+        precio_unitario = ?,
+        importe = ?,
+        subtotal_linea = ?,
+        proveedor_id = ?,
+        proveedor = ?,
+        notas_linea = ?
+      WHERE id = ?`,
+      [
+        sku || null,
+        codigo_proveedor || null,
+        cantidad || 1,
+        unidad_medida || 'PZA',
+        precio_unitario || 0,
+        importe,
+        subtotal_linea,
+        proveedor_id || null,
+        proveedor || null,
+        notas_linea || null,
+        id,
+      ]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Línea no encontrada",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Línea actualizada exitosamente",
+    });
+  } catch (error) {
+    console.error("[v0] Error en updateRequestLine:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error al actualizar línea",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+}
+
 module.exports = {
   createRequest,
   approveRequest,
@@ -853,4 +1010,6 @@ module.exports = {
   deleteUser,
   loginUsers__,
   resetPassword__,
+  updatePurchaseOrderInfo,
+  updateRequestLine,
 };
