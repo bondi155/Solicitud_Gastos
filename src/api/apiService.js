@@ -162,9 +162,26 @@ rejectRequest: async (id, comments, approverId) => {
   },
 
   updateLineProvider: async (lineId, provider) => {
-  const response = await axios.post(`${API_BASE_URL}/api/request-lines/${lineId}/provider`, { provider })
-  return response.data
-},
+    const response = await axios.post(`${API_BASE_URL}/api/request-lines/${lineId}/provider`, { provider })
+    return response.data
+  },
+
+  // ==================== ORDEN DE COMPRA ====================
+  updatePurchaseOrder: async (requestId, data) => {
+    const response = await axios.put(`${API_BASE_URL}/api/requests/${requestId}/purchase-order`, data)
+    return response.data
+  },
+
+  updateRequestLine: async (lineId, data) => {
+    const response = await axios.put(`${API_BASE_URL}/api/request-lines/${lineId}`, data)
+    return response.data
+  },
+
+  // Proveedores
+  getProviders: async () => {
+    const response = await axios.get(`${API_BASE_URL}/api/providers`)
+    return response.data
+  },
 };
 
 export default apiService;

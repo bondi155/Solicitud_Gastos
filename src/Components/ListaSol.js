@@ -46,6 +46,8 @@ import {
   ShoppingCart as ShoppingCartIcon,
 } from "@mui/icons-material";
 import apiService from "../api/apiService";
+import PurchaseOrderSection from "./PurchaseOrderSection";
+
 export default function RequestsList({ requests }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -964,6 +966,20 @@ export default function RequestsList({ requests }) {
                     )}
                   </Box>
                 </Grid>
+
+                {/* Sección de Orden de Compra - Solo para solicitudes aprobadas */}
+                {selectedRequest.estado === "Aprobada" && (
+                  <Grid item xs={12}>
+                    <PurchaseOrderSection
+                      request={selectedRequest}
+                      onUpdate={async () => {
+                        // Recargar los detalles de la solicitud
+                        const fullRequest = await apiService.getRequestDetail(selectedRequest.id);
+                        setSelectedRequest(fullRequest.data);
+                      }}
+                    />
+                  </Grid>
+                )}
 
                 {(selectedRequest.estado === "Pendiente" ||
                   selectedRequest.estado === "pending") && (

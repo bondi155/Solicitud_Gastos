@@ -242,16 +242,29 @@ async function getRequestDetail(req, res) {
 
     const [lines] = await pool.query(
       `
-      SELECT 
+      SELECT
         sl.id,
         sl.categoria_id,
         c.nombre as category,
         sl.monto as amount,
         sl.descripcion as description,
         sl.proveedor as provider,
-        sl.orden
+        sl.proveedor_id,
+        sl.sku,
+        sl.codigo_proveedor,
+        sl.cantidad,
+        sl.unidad_medida,
+        sl.precio_unitario,
+        sl.importe,
+        sl.descuento_linea,
+        sl.subtotal_linea,
+        sl.notas_linea,
+        sl.orden,
+        p.nombre_comercial as proveedor_nombre,
+        p.rfc as proveedor_rfc
       FROM solicitud_lineas sl
       JOIN categorias c ON sl.categoria_id = c.id
+      LEFT JOIN proveedores p ON sl.proveedor_id = p.id
       WHERE sl.solicitud_id = ?
       ORDER BY sl.orden
     `,
@@ -471,6 +484,46 @@ async function getReports(req, res) {
   }
 }
 
+// GET /api/providers
+async function getProviders(req, res) {
+  try {
+    const [result] = await pool.query(`
+      SELECT
+        id,
+        nombre_comercial as name,
+        razon_social,
+        rfc,
+        direccion,
+        ciudad,
+        estado,
+        codigo_postal,
+        telefono,
+        email,
+        contacto_principal,
+        telefono_contacto,
+        email_contacto,
+        condiciones_pago,
+        dias_credito,
+        activo as active
+      FROM proveedores
+      WHERE activo = 1
+      ORDER BY nombre_comercial
+    `);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error("Error en getProviders:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error al obtener proveedores",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+}
+
 module.exports = {
   getDashboardStats,
   getMonthlyRequests,
@@ -484,4 +537,5 @@ module.exports = {
   getDepartments,
   getCostCenters,
   getUsers,
+  getProviders,
 };
