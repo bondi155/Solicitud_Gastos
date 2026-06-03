@@ -93,6 +93,8 @@ app.get("/api/requests/:id", authenticateToken, GetDataController.getRequestDeta
 app.post("/api/requests/:id/approve", authenticateToken, PostDataController.approveRequest)
 app.post("/api/requests/:id/reject", authenticateToken, PostDataController.rejectRequest)
 app.post("/api/requests", authenticateToken, upload.array("attachments", 5), PostDataController.createRequest)
+app.put("/api/requests/:id/purchase-order", authenticateToken, PostDataController.updatePurchaseOrderInfo)
+app.put("/api/request-lines/:id", authenticateToken, PostDataController.updateRequestLine)
 // ==================== CONFIGURACIÓN ====================
 // Categorías
 app.get("/api/categories", authenticateToken, GetDataController.getCategories)
@@ -117,6 +119,9 @@ app.get("/api/users", authenticateToken, GetDataController.getUsers)
 app.post("/api/users", authenticateToken, PostDataController.createUser)
 app.put("/api/users/:id", authenticateToken, PostDataController.updateUser)
 app.delete("/api/users/:id", authenticateToken, PostDataController.deleteUser)
+
+// Proveedores
+app.get("/api/providers", authenticateToken, GetDataController.getProviders)
 
 // Reports
 app.get("/api/reports", authenticateToken, GetDataController.getReports)
