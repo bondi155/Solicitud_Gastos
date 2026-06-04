@@ -122,6 +122,21 @@ app.delete("/api/users/:id", authenticateToken, PostDataController.deleteUser)
 
 // Proveedores
 app.get("/api/providers", authenticateToken, GetDataController.getProviders)
+app.post("/api/providers", authenticateToken, PostDataController.createProvider)
+app.put("/api/providers/:id", authenticateToken, PostDataController.updateProvider)
+app.delete("/api/providers/:id", authenticateToken, PostDataController.deleteProvider)
+
+// Artículos
+app.get("/api/articles", authenticateToken, GetDataController.getArticles)
+app.post("/api/articles", authenticateToken, PostDataController.createArticle)
+app.put("/api/articles/:id", authenticateToken, PostDataController.updateArticle)
+app.delete("/api/articles/:id", authenticateToken, PostDataController.deleteArticle)
+
+// Almacenes
+app.get("/api/warehouses", authenticateToken, GetDataController.getWarehouses)
+app.post("/api/warehouses", authenticateToken, PostDataController.createWarehouse)
+app.put("/api/warehouses/:id", authenticateToken, PostDataController.updateWarehouse)
+app.delete("/api/warehouses/:id", authenticateToken, PostDataController.deleteWarehouse)
 
 // Reports
 app.get("/api/reports", authenticateToken, GetDataController.getReports)
