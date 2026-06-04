@@ -182,6 +182,63 @@ rejectRequest: async (id, comments, approverId) => {
     const response = await axios.get(`${API_BASE_URL}/api/providers`)
     return response.data
   },
+
+  createProvider: async (data) => {
+    const response = await axios.post(`${API_BASE_URL}/api/providers`, data)
+    return response.data
+  },
+
+  updateProvider: async (id, data) => {
+    const response = await axios.put(`${API_BASE_URL}/api/providers/${id}`, data)
+    return response.data
+  },
+
+  deleteProvider: async (id) => {
+    const response = await axios.delete(`${API_BASE_URL}/api/providers/${id}`)
+    return response.data
+  },
+
+  // ==================== ARTÍCULOS ====================
+  getArticles: async () => {
+    const response = await axios.get(`${API_BASE_URL}/api/articles`)
+    return response.data
+  },
+
+  createArticle: async (data) => {
+    const response = await axios.post(`${API_BASE_URL}/api/articles`, data)
+    return response.data
+  },
+
+  updateArticle: async (id, data) => {
+    const response = await axios.put(`${API_BASE_URL}/api/articles/${id}`, data)
+    return response.data
+  },
+
+  deleteArticle: async (id) => {
+    const response = await axios.delete(`${API_BASE_URL}/api/articles/${id}`)
+    return response.data
+  },
+
+  // ==================== ALMACENES ====================
+  getWarehouses: async () => {
+    const response = await axios.get(`${API_BASE_URL}/api/warehouses`)
+    return response.data
+  },
+
+  createWarehouse: async (data) => {
+    const response = await axios.post(`${API_BASE_URL}/api/warehouses`, data)
+    return response.data
+  },
+
+  updateWarehouse: async (id, data) => {
+    const response = await axios.put(`${API_BASE_URL}/api/warehouses/${id}`, data)
+    return response.data
+  },
+
+  deleteWarehouse: async (id) => {
+    const response = await axios.delete(`${API_BASE_URL}/api/warehouses/${id}`)
+    return response.data
+  },
 };
 
 export default apiService;

@@ -990,6 +990,168 @@ async function updateRequestLine(req, res) {
   }
 }
 
+// ==================== ARTÍCULOS ====================
+
+// POST /api/articles
+async function createArticle(req, res) {
+  try {
+    const { code, name, description, categoria_id, unit, price, purchasePrice, currency, minStock, maxStock, location } = req.body;
+
+    if (!code || !name) {
+      return res.status(400).json({ success: false, message: "Código y nombre son requeridos" });
+    }
+
+    const [result] = await pool.query(
+      `INSERT INTO articulos (codigo, nombre, descripcion, categoria_id, unidad_medida, precio_unitario, precio_compra, moneda, stock_minimo, stock_maximo, ubicacion, activo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [code, name, description || null, categoria_id || null, unit || 'PZA', price || 0, purchasePrice || 0, currency || 'MXN', minStock || 0, maxStock || 0, location || null]
+    );
+
+    res.json({ success: true, message: "Artículo creado exitosamente", data: { id: result.insertId } });
+  } catch (error) {
+    console.error("Error en createArticle:", error);
+    res.status(500).json({ success: false, message: "Error al crear artículo", error: process.env.NODE_ENV === 'development' ? error.message : undefined });
+  }
+}
+
+// PUT /api/articles/:id
+async function updateArticle(req, res) {
+  try {
+    const { id } = req.params;
+    const { code, name, description, categoria_id, unit, price, purchasePrice, currency, minStock, maxStock, location, active } = req.body;
+
+    await pool.query(
+      `UPDATE articulos SET codigo = ?, nombre = ?, descripcion = ?, categoria_id = ?, unidad_medida = ?, precio_unitario = ?, precio_compra = ?, moneda = ?, stock_minimo = ?, stock_maximo = ?, ubicacion = ?, activo = ? WHERE id = ?`,
+      [code, name, description, categoria_id, unit, price, purchasePrice, currency, minStock, maxStock, location, active ? 1 : 0, id]
+    );
+
+    res.json({ success: true, message: "Artículo actualizado exitosamente" });
+  } catch (error) {
+    console.error("Error en updateArticle:", error);
+    res.status(500).json({ success: false, message: "Error al actualizar artículo" });
+  }
+}
+
+// DELETE /api/articles/:id
+async function deleteArticle(req, res) {
+  try {
+    const { id } = req.params;
+    await pool.query("DELETE FROM articulos WHERE id = ?", [id]);
+    res.json({ success: true, message: "Artículo eliminado exitosamente" });
+  } catch (error) {
+    console.error("Error en deleteArticle:", error);
+    res.status(500).json({ success: false, message: "Error al eliminar artículo" });
+  }
+}
+
+// ==================== PROVEEDORES ====================
+
+// POST /api/providers
+async function createProvider(req, res) {
+  try {
+    const { name, razon_social, rfc, direccion, ciudad, estado, codigo_postal, telefono, email, contacto_principal, telefono_contacto, email_contacto, condiciones_pago, dias_credito } = req.body;
+
+    if (!name || !razon_social) {
+      return res.status(400).json({ success: false, message: "Nombre y razón social son requeridos" });
+    }
+
+    const [result] = await pool.query(
+      `INSERT INTO proveedores (nombre_comercial, razon_social, rfc, direccion, ciudad, estado, codigo_postal, telefono, email, contacto_principal, telefono_contacto, email_contacto, condiciones_pago, dias_credito, activo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [name, razon_social, rfc || null, direccion || null, ciudad || null, estado || null, codigo_postal || null, telefono || null, email || null, contacto_principal || null, telefono_contacto || null, email_contacto || null, condiciones_pago || null, dias_credito || 0]
+    );
+
+    res.json({ success: true, message: "Proveedor creado exitosamente", data: { id: result.insertId } });
+  } catch (error) {
+    console.error("Error en createProvider:", error);
+    res.status(500).json({ success: false, message: "Error al crear proveedor" });
+  }
+}
+
+// PUT /api/providers/:id
+async function updateProvider(req, res) {
+  try {
+    const { id } = req.params;
+    const { name, razon_social, rfc, direccion, ciudad, estado, codigo_postal, telefono, email, contacto_principal, telefono_contacto, email_contacto, condiciones_pago, dias_credito, active } = req.body;
+
+    await pool.query(
+      `UPDATE proveedores SET nombre_comercial = ?, razon_social = ?, rfc = ?, direccion = ?, ciudad = ?, estado = ?, codigo_postal = ?, telefono = ?, email = ?, contacto_principal = ?, telefono_contacto = ?, email_contacto = ?, condiciones_pago = ?, dias_credito = ?, activo = ? WHERE id = ?`,
+      [name, razon_social, rfc, direccion, ciudad, estado, codigo_postal, telefono, email, contacto_principal, telefono_contacto, email_contacto, condiciones_pago, dias_credito, active ? 1 : 0, id]
+    );
+
+    res.json({ success: true, message: "Proveedor actualizado exitosamente" });
+  } catch (error) {
+    console.error("Error en updateProvider:", error);
+    res.status(500).json({ success: false, message: "Error al actualizar proveedor" });
+  }
+}
+
+// DELETE /api/providers/:id
+async function deleteProvider(req, res) {
+  try {
+    const { id } = req.params;
+    await pool.query("DELETE FROM proveedores WHERE id = ?", [id]);
+    res.json({ success: true, message: "Proveedor eliminado exitosamente" });
+  } catch (error) {
+    console.error("Error en deleteProvider:", error);
+    res.status(500).json({ success: false, message: "Error al eliminar proveedor" });
+  }
+}
+
+// ==================== ALMACENES ====================
+
+// POST /api/warehouses
+async function createWarehouse(req, res) {
+  try {
+    const { code, name, description, address, city, state, zipCode, manager, phone, email, capacity, type } = req.body;
+
+    if (!code || !name) {
+      return res.status(400).json({ success: false, message: "Código y nombre son requeridos" });
+    }
+
+    const [result] = await pool.query(
+      `INSERT INTO almacenes (codigo, nombre, descripcion, direccion, ciudad, estado, codigo_postal, responsable, telefono, email, capacidad_m3, tipo, activo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [code, name, description || null, address || null, city || null, state || null, zipCode || null, manager || null, phone || null, email || null, capacity || null, type || null]
+    );
+
+    res.json({ success: true, message: "Almacén creado exitosamente", data: { id: result.insertId } });
+  } catch (error) {
+    console.error("Error en createWarehouse:", error);
+    res.status(500).json({ success: false, message: "Error al crear almacén" });
+  }
+}
+
+// PUT /api/warehouses/:id
+async function updateWarehouse(req, res) {
+  try {
+    const { id } = req.params;
+    const { code, name, description, address, city, state, zipCode, manager, phone, email, capacity, type, active } = req.body;
+
+    await pool.query(
+      `UPDATE almacenes SET codigo = ?, nombre = ?, descripcion = ?, direccion = ?, ciudad = ?, estado = ?, codigo_postal = ?, responsable = ?, telefono = ?, email = ?, capacidad_m3 = ?, tipo = ?, activo = ? WHERE id = ?`,
+      [code, name, description, address, city, state, zipCode, manager, phone, email, capacity, type, active ? 1 : 0, id]
+    );
+
+    res.json({ success: true, message: "Almacén actualizado exitosamente" });
+  } catch (error) {
+    console.error("Error en updateWarehouse:", error);
+    res.status(500).json({ success: false, message: "Error al actualizar almacén" });
+  }
+}
+
+// DELETE /api/warehouses/:id
+async function deleteWarehouse(req, res) {
+  try {
+    const { id } = req.params;
+    await pool.query("DELETE FROM almacenes WHERE id = ?", [id]);
+    res.json({ success: true, message: "Almacén eliminado exitosamente" });
+  } catch (error) {
+    console.error("Error en deleteWarehouse:", error);
+    res.status(500).json({ success: false, message: "Error al eliminar almacén" });
+  }
+}
+
 module.exports = {
   createRequest,
   approveRequest,
@@ -1012,4 +1174,13 @@ module.exports = {
   resetPassword__,
   updatePurchaseOrderInfo,
   updateRequestLine,
+  createArticle,
+  updateArticle,
+  deleteArticle,
+  createProvider,
+  updateProvider,
+  deleteProvider,
+  createWarehouse,
+  updateWarehouse,
+  deleteWarehouse,
 };

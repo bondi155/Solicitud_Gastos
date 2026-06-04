@@ -50,11 +50,17 @@ export default function Configuration() {
   const [searchCategory, setSearchCategory] = useState("")
   const [searchDepartment, setSearchDepartment] = useState("")
   const [searchCostCenter, setSearchCostCenter] = useState("")
+  const [searchArticle, setSearchArticle] = useState("")
+  const [searchProvider, setSearchProvider] = useState("")
+  const [searchWarehouse, setSearchWarehouse] = useState("")
   const [searchUser, setSearchUser] = useState("")
 
   const [categories, setCategories] = useState([])
   const [departments, setDepartments] = useState([])
   const [costCenters, setCostCenters] = useState([])
+  const [articles, setArticles] = useState([])
+  const [providers, setProviders] = useState([])
+  const [warehouses, setWarehouses] = useState([])
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -66,16 +72,22 @@ export default function Configuration() {
     const fetchConfigData = async () => {
       try {
         setLoading(true)
-        const [categoriesData, departmentsData, centersData, usersData] = await Promise.all([
+        const [categoriesData, departmentsData, centersData, articlesData, providersData, warehousesData, usersData] = await Promise.all([
           apiService.getCategories(),
           apiService.getDepartments(),
           apiService.getCenters(),
+          apiService.getArticles(),
+          apiService.getProviders(),
+          apiService.getWarehouses(),
           apiService.getUsers(),
         ])
 
         setCategories(categoriesData.data || [])
         setDepartments(departmentsData.data || [])
         setCostCenters(centersData.data || [])
+        setArticles(articlesData.data || [])
+        setProviders(providersData.data || [])
+        setWarehouses(warehousesData.data || [])
         setUsers(usersData.data || [])
         setError(null)
       } catch (err) {
@@ -110,6 +122,32 @@ export default function Configuration() {
       (cc) =>
         (cc.code || "").toLowerCase().includes(searchCostCenter.toLowerCase()) ||
         (cc.name || "").toLowerCase().includes(searchCostCenter.toLowerCase()),
+    )
+  }
+
+  const getFilteredArticles = () => {
+    return articles.filter(
+      (article) =>
+        (article.code || "").toLowerCase().includes(searchArticle.toLowerCase()) ||
+        (article.name || "").toLowerCase().includes(searchArticle.toLowerCase()) ||
+        (article.category || "").toLowerCase().includes(searchArticle.toLowerCase()),
+    )
+  }
+
+  const getFilteredProviders = () => {
+    return providers.filter(
+      (provider) =>
+        (provider.name || "").toLowerCase().includes(searchProvider.toLowerCase()) ||
+        (provider.razon_social || "").toLowerCase().includes(searchProvider.toLowerCase()) ||
+        (provider.rfc || "").toLowerCase().includes(searchProvider.toLowerCase()),
+    )
+  }
+
+  const getFilteredWarehouses = () => {
+    return warehouses.filter(
+      (warehouse) =>
+        (warehouse.code || "").toLowerCase().includes(searchWarehouse.toLowerCase()) ||
+        (warehouse.name || "").toLowerCase().includes(searchWarehouse.toLowerCase()),
     )
   }
 
@@ -174,6 +212,21 @@ export default function Configuration() {
             const centersData = await apiService.getCenters()
             setCostCenters(centersData.data || [])
             break
+          case "article":
+            await apiService.createArticle(formData)
+            const articlesDataAdd = await apiService.getArticles()
+            setArticles(articlesDataAdd.data || [])
+            break
+          case "provider":
+            await apiService.createProvider(formData)
+            const providersDataAdd = await apiService.getProviders()
+            setProviders(providersDataAdd.data || [])
+            break
+          case "warehouse":
+            await apiService.createWarehouse(formData)
+            const warehousesDataAdd = await apiService.getWarehouses()
+            setWarehouses(warehousesDataAdd.data || [])
+            break
           case "user":
             await apiService.createUser(formData)
             const usersData = await apiService.getUsers()
@@ -206,6 +259,21 @@ export default function Configuration() {
             await apiService.updateCenter(selectedItem.id, costCenterUpdateData)
             const centersData = await apiService.getCenters()
             setCostCenters(centersData.data || [])
+            break
+          case "article":
+            await apiService.updateArticle(selectedItem.id, formData)
+            const articlesDataUpdate = await apiService.getArticles()
+            setArticles(articlesDataUpdate.data || [])
+            break
+          case "provider":
+            await apiService.updateProvider(selectedItem.id, formData)
+            const providersDataUpdate = await apiService.getProviders()
+            setProviders(providersDataUpdate.data || [])
+            break
+          case "warehouse":
+            await apiService.updateWarehouse(selectedItem.id, formData)
+            const warehousesDataUpdate = await apiService.getWarehouses()
+            setWarehouses(warehousesDataUpdate.data || [])
             break
           case "user":
             await apiService.updateUser(selectedItem.id, formData)
@@ -249,6 +317,18 @@ export default function Configuration() {
             await apiService.deleteCenter(id)
             setCostCenters(costCenters.filter((item) => item.id !== id))
             break
+          case "article":
+            await apiService.deleteArticle(id)
+            setArticles(articles.filter((item) => item.id !== id))
+            break
+          case "provider":
+            await apiService.deleteProvider(id)
+            setProviders(providers.filter((item) => item.id !== id))
+            break
+          case "warehouse":
+            await apiService.deleteWarehouse(id)
+            setWarehouses(warehouses.filter((item) => item.id !== id))
+            break
           case "user":
             await apiService.deleteUser(id)
             setUsers(users.filter((item) => item.id !== id))
@@ -280,6 +360,12 @@ export default function Configuration() {
         return departments
       case "costCenter":
         return costCenters
+      case "article":
+        return articles
+      case "provider":
+        return providers
+      case "warehouse":
+        return warehouses
       case "user":
         return users
       default:
@@ -365,6 +451,67 @@ export default function Configuration() {
           </>
         )
 
+      case "article":
+        return (
+          <>
+            <TextField fullWidth label="Código/SKU" value={formData.code || ""} onChange={(e) => setFormData({ ...formData, code: e.target.value })} margin="normal" required />
+            <TextField fullWidth label="Nombre" value={formData.name || ""} onChange={(e) => setFormData({ ...formData, name: e.target.value })} margin="normal" required />
+            <TextField fullWidth label="Descripción" value={formData.description || ""} onChange={(e) => setFormData({ ...formData, description: e.target.value })} margin="normal" multiline rows={2} />
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Categoría</InputLabel>
+              <Select value={formData.categoria_id || ""} onChange={(e) => setFormData({ ...formData, categoria_id: e.target.value })} label="Categoría">
+                <MenuItem value="">Sin categoría</MenuItem>
+                {categories.map((cat) => (<MenuItem key={cat.id} value={cat.id}>{cat.name}</MenuItem>))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Unidad de Medida</InputLabel>
+              <Select value={formData.unit || "PZA"} onChange={(e) => setFormData({ ...formData, unit: e.target.value })} label="Unidad de Medida">
+                <MenuItem value="PZA">Pieza</MenuItem>
+                <MenuItem value="KG">Kilogramo</MenuItem>
+                <MenuItem value="LT">Litro</MenuItem>
+                <MenuItem value="M">Metro</MenuItem>
+                <MenuItem value="SERV">Servicio</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField fullWidth label="Precio Unitario" type="number" value={formData.price || ""} onChange={(e) => setFormData({ ...formData, price: e.target.value })} margin="normal" inputProps={{ step: "0.01" }} />
+          </>
+        )
+
+      case "provider":
+        return (
+          <>
+            <TextField fullWidth label="Nombre Comercial" value={formData.name || ""} onChange={(e) => setFormData({ ...formData, name: e.target.value })} margin="normal" required />
+            <TextField fullWidth label="Razón Social" value={formData.razon_social || ""} onChange={(e) => setFormData({ ...formData, razon_social: e.target.value })} margin="normal" required />
+            <TextField fullWidth label="RFC" value={formData.rfc || ""} onChange={(e) => setFormData({ ...formData, rfc: e.target.value })} margin="normal" />
+            <TextField fullWidth label="Dirección" value={formData.direccion || ""} onChange={(e) => setFormData({ ...formData, direccion: e.target.value })} margin="normal" />
+            <TextField fullWidth label="Teléfono" value={formData.telefono || ""} onChange={(e) => setFormData({ ...formData, telefono: e.target.value })} margin="normal" />
+            <TextField fullWidth label="Email" type="email" value={formData.email || ""} onChange={(e) => setFormData({ ...formData, email: e.target.value })} margin="normal" />
+            <TextField fullWidth label="Contacto Principal" value={formData.contacto_principal || ""} onChange={(e) => setFormData({ ...formData, contacto_principal: e.target.value })} margin="normal" />
+          </>
+        )
+
+      case "warehouse":
+        return (
+          <>
+            <TextField fullWidth label="Código" value={formData.code || ""} onChange={(e) => setFormData({ ...formData, code: e.target.value })} margin="normal" required />
+            <TextField fullWidth label="Nombre" value={formData.name || ""} onChange={(e) => setFormData({ ...formData, name: e.target.value })} margin="normal" required />
+            <TextField fullWidth label="Descripción" value={formData.description || ""} onChange={(e) => setFormData({ ...formData, description: e.target.value })} margin="normal" multiline rows={2} />
+            <TextField fullWidth label="Dirección" value={formData.address || ""} onChange={(e) => setFormData({ ...formData, address: e.target.value })} margin="normal" />
+            <TextField fullWidth label="Responsable" value={formData.manager || ""} onChange={(e) => setFormData({ ...formData, manager: e.target.value })} margin="normal" />
+            <TextField fullWidth label="Teléfono" value={formData.phone || ""} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} margin="normal" />
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Tipo</InputLabel>
+              <Select value={formData.type || ""} onChange={(e) => setFormData({ ...formData, type: e.target.value })} label="Tipo">
+                <MenuItem value="">Sin especificar</MenuItem>
+                <MenuItem value="Principal">Principal</MenuItem>
+                <MenuItem value="Secundario">Secundario</MenuItem>
+                <MenuItem value="Tránsito">Tránsito</MenuItem>
+              </Select>
+            </FormControl>
+          </>
+        )
+
       case "user":
         return (
           <>
@@ -436,6 +583,9 @@ export default function Configuration() {
       category: "Categoría",
       department: "Departamento",
       costCenter: "Centro de Costos",
+      article: "Artículo",
+      provider: "Proveedor",
+      warehouse: "Almacén",
       user: "Usuario",
     }
 
@@ -479,6 +629,9 @@ export default function Configuration() {
             <Tab label="Categorías" />
             <Tab label="Departamentos" />
             <Tab label="Centros de Costos" />
+            <Tab label="Artículos" />
+            <Tab label="Proveedores" />
+            <Tab label="Almacenes" />
             <Tab label="Usuarios" />
           </Tabs>
 
@@ -775,8 +928,170 @@ export default function Configuration() {
             </Box>
           )}
 
-          {/* Tab 4: Usuarios */}
+          {/* Tab 3: Artículos */}
           {activeTab === 3 && (
+            <Box>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, gap: 2 }}>
+                <Typography variant="h6">Artículos/Productos</Typography>
+                <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+                  <TextField
+                    size="small"
+                    placeholder="Buscar artículos..."
+                    value={searchArticle}
+                    onChange={(e) => setSearchArticle(e.target.value)}
+                    InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }}
+                    sx={{ minWidth: 250 }}
+                  />
+                  <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog("article", "add")}>Agregar</Button>
+                </Box>
+              </Box>
+              <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 500, overflow: "auto" }}>
+                <Table stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Código/SKU</TableCell>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Nombre</TableCell>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Categoría</TableCell>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Unidad</TableCell>
+                      <TableCell align="right" sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Precio</TableCell>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Estado</TableCell>
+                      <TableCell align="right" sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Acciones</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {getFilteredArticles().map((article) => (
+                      <TableRow key={article.id} hover>
+                        <TableCell>{article.code}</TableCell>
+                        <TableCell>{article.name}</TableCell>
+                        <TableCell>{article.category || '-'}</TableCell>
+                        <TableCell>{article.unit}</TableCell>
+                        <TableCell align="right">${Number(article.price || 0).toFixed(2)}</TableCell>
+                        <TableCell><Chip label={article.active ? "Activo" : "Inactivo"} color={article.active ? "success" : "default"} size="small" /></TableCell>
+                        <TableCell align="right">
+                          <IconButton size="small" color="primary" onClick={() => handleOpenDialog("article", "edit", article)}><EditIcon /></IconButton>
+                          <IconButton size="small" color="error" onClick={() => handleDelete("article", article.id)}><DeleteIcon /></IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Mostrando {getFilteredArticles().length} de {articles.length} artículos
+              </Typography>
+            </Box>
+          )}
+
+          {/* Tab 4: Proveedores */}
+          {activeTab === 4 && (
+            <Box>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, gap: 2 }}>
+                <Typography variant="h6">Proveedores</Typography>
+                <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+                  <TextField
+                    size="small"
+                    placeholder="Buscar proveedores..."
+                    value={searchProvider}
+                    onChange={(e) => setSearchProvider(e.target.value)}
+                    InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }}
+                    sx={{ minWidth: 250 }}
+                  />
+                  <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog("provider", "add")}>Agregar</Button>
+                </Box>
+              </Box>
+              <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 500, overflow: "auto" }}>
+                <Table stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Nombre Comercial</TableCell>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Razón Social</TableCell>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>RFC</TableCell>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Teléfono</TableCell>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Email</TableCell>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Estado</TableCell>
+                      <TableCell align="right" sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Acciones</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {getFilteredProviders().map((provider) => (
+                      <TableRow key={provider.id} hover>
+                        <TableCell>{provider.name}</TableCell>
+                        <TableCell>{provider.razon_social}</TableCell>
+                        <TableCell>{provider.rfc || '-'}</TableCell>
+                        <TableCell>{provider.telefono || '-'}</TableCell>
+                        <TableCell>{provider.email || '-'}</TableCell>
+                        <TableCell><Chip label={provider.active ? "Activo" : "Inactivo"} color={provider.active ? "success" : "default"} size="small" /></TableCell>
+                        <TableCell align="right">
+                          <IconButton size="small" color="primary" onClick={() => handleOpenDialog("provider", "edit", provider)}><EditIcon /></IconButton>
+                          <IconButton size="small" color="error" onClick={() => handleDelete("provider", provider.id)}><DeleteIcon /></IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Mostrando {getFilteredProviders().length} de {providers.length} proveedores
+              </Typography>
+            </Box>
+          )}
+
+          {/* Tab 5: Almacenes */}
+          {activeTab === 5 && (
+            <Box>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, gap: 2 }}>
+                <Typography variant="h6">Almacenes</Typography>
+                <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+                  <TextField
+                    size="small"
+                    placeholder="Buscar almacenes..."
+                    value={searchWarehouse}
+                    onChange={(e) => setSearchWarehouse(e.target.value)}
+                    InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>) }}
+                    sx={{ minWidth: 250 }}
+                  />
+                  <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog("warehouse", "add")}>Agregar</Button>
+                </Box>
+              </Box>
+              <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 500, overflow: "auto" }}>
+                <Table stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Código</TableCell>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Nombre</TableCell>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Responsable</TableCell>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Teléfono</TableCell>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Tipo</TableCell>
+                      <TableCell sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Estado</TableCell>
+                      <TableCell align="right" sx={{ backgroundColor: "grey.100", fontWeight: "bold" }}>Acciones</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {getFilteredWarehouses().map((warehouse) => (
+                      <TableRow key={warehouse.id} hover>
+                        <TableCell>{warehouse.code}</TableCell>
+                        <TableCell>{warehouse.name}</TableCell>
+                        <TableCell>{warehouse.manager || '-'}</TableCell>
+                        <TableCell>{warehouse.phone || '-'}</TableCell>
+                        <TableCell>{warehouse.type || '-'}</TableCell>
+                        <TableCell><Chip label={warehouse.active ? "Activo" : "Inactivo"} color={warehouse.active ? "success" : "default"} size="small" /></TableCell>
+                        <TableCell align="right">
+                          <IconButton size="small" color="primary" onClick={() => handleOpenDialog("warehouse", "edit", warehouse)}><EditIcon /></IconButton>
+                          <IconButton size="small" color="error" onClick={() => handleDelete("warehouse", warehouse.id)}><DeleteIcon /></IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Mostrando {getFilteredWarehouses().length} de {warehouses.length} almacenes
+              </Typography>
+            </Box>
+          )}
+
+          {/* Tab 6: Usuarios */}
+          {activeTab === 6 && (
             <Box>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, gap: 2 }}>
                 <Typography variant="h6">Usuarios del Sistema</Typography>

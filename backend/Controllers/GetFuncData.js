@@ -524,6 +524,81 @@ async function getProviders(req, res) {
   }
 }
 
+// GET /api/articles
+async function getArticles(req, res) {
+  try {
+    const [result] = await pool.query(`
+      SELECT
+        a.id,
+        a.codigo as code,
+        a.nombre as name,
+        a.descripcion as description,
+        a.categoria_id,
+        c.nombre as category,
+        a.unidad_medida as unit,
+        a.precio_unitario as price,
+        a.precio_compra as purchasePrice,
+        a.moneda as currency,
+        a.stock_minimo as minStock,
+        a.stock_maximo as maxStock,
+        a.ubicacion as location,
+        a.activo as active
+      FROM articulos a
+      LEFT JOIN categorias c ON a.categoria_id = c.id
+      ORDER BY a.nombre
+    `);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error("Error en getArticles:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error al obtener artículos",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+}
+
+// GET /api/warehouses
+async function getWarehouses(req, res) {
+  try {
+    const [result] = await pool.query(`
+      SELECT
+        id,
+        codigo as code,
+        nombre as name,
+        descripcion as description,
+        direccion as address,
+        ciudad as city,
+        estado as state,
+        codigo_postal as zipCode,
+        responsable as manager,
+        telefono as phone,
+        email,
+        capacidad_m3 as capacity,
+        tipo as type,
+        activo as active
+      FROM almacenes
+      ORDER BY nombre
+    `);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error("Error en getWarehouses:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error al obtener almacenes",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+}
+
 module.exports = {
   getDashboardStats,
   getMonthlyRequests,
@@ -538,4 +613,6 @@ module.exports = {
   getCostCenters,
   getUsers,
   getProviders,
+  getArticles,
+  getWarehouses,
 };
