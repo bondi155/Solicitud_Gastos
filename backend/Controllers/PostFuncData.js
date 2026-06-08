@@ -82,7 +82,7 @@ async function createRequest(req, res) {
       lines = JSON.parse(lines);
     }
 
-    const { userId, department, costCenter, date, title } = req.body;
+    const { userId, department, costCenter, date, title, paymentTerms, paymentMethod, creditDays, documentType } = req.body;
 
     if (
       !userId ||
@@ -145,11 +145,11 @@ async function createRequest(req, res) {
 
     const [result] = await connection.query(
       `
-      INSERT INTO solicitudes 
-      (titulo, usuario_id, departamento_id, centro_costo_id, monto_total, estado, fecha_solicitud)
-      VALUES (?, ?, ?, ?, ?, 'Pendiente', ?)
+      INSERT INTO solicitudes
+      (titulo, usuario_id, departamento_id, centro_costo_id, monto_total, estado, fecha_solicitud, condiciones_pago, metodo_pago, dias_credito)
+      VALUES (?, ?, ?, ?, ?, 'Pendiente', ?, ?, ?, ?)
     `,
-      [title, userId, departmentData[0].id, costCenterId, montoTotal, date]
+      [title, userId, departmentData[0].id, costCenterId, montoTotal, date, paymentTerms || null, paymentMethod || null, creditDays || 0]
     );
 
     const requestId = result.insertId;
@@ -157,14 +157,26 @@ async function createRequest(req, res) {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
 
+      // Obtener centro de costo de la línea si existe
+      let lineCostCenterId = null;
+      if (line.costCenter) {
+        const [lineCostCenterData] = await connection.query(
+          "SELECT id FROM centros_costos WHERE codigo = ?",
+          [line.costCenter]
+        );
+        if (lineCostCenterData.length > 0) {
+          lineCostCenterId = lineCostCenterData[0].id;
+        }
+      }
+
       // Insertar línea usando el ID de categoría directamente
       await connection.query(
         `
-        INSERT INTO solicitud_lineas 
-        (solicitud_id, categoria_id, monto, descripcion, orden)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO solicitud_lineas
+        (solicitud_id, categoria_id, monto, descripcion, orden, centro_costo_id)
+        VALUES (?, ?, ?, ?, ?, ?)
       `,
-        [requestId, line.category, line.amount, line.description, i + 1]
+        [requestId, line.category, line.amount, line.description, i + 1, lineCostCenterId]
       );
     }
 
@@ -176,9 +188,9 @@ async function createRequest(req, res) {
 
           await connection.query(
             `
-            INSERT INTO archivos_adjuntos 
-            (solicitud_id, nombre_archivo, ruta_archivo, tipo_archivo, tamano)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO archivos_adjuntos
+            (solicitud_id, nombre_archivo, ruta_archivo, tipo_archivo, tamano, tipo_documento)
+            VALUES (?, ?, ?, ?, ?, ?)
           `,
             [
               requestId,
@@ -186,6 +198,7 @@ async function createRequest(req, res) {
               blobData.url,
               blobData.type,
               blobData.size,
+              documentType || 'otro',
             ]
           );
         } catch (uploadError) {
@@ -990,6 +1003,481 @@ async function updateRequestLine(req, res) {
   }
 }
 
+// ==================== ARTÍCULOS ====================
+
+// POST /api/articles
+async function createArticle(req, res) {
+  try {
+    const { code, name, description, categoria_id, unit, price, purchasePrice, currency, minStock, maxStock, location } = req.body;
+
+    if (!code || !name) {
+      return res.status(400).json({ success: false, message: "Código y nombre son requeridos" });
+    }
+
+    const [result] = await pool.query(
+      `INSERT INTO articulos (codigo, nombre, descripcion, categoria_id, unidad_medida, precio_unitario, precio_compra, moneda, stock_minimo, stock_maximo, ubicacion, activo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [code, name, description || null, categoria_id || null, unit || 'PZA', price || 0, purchasePrice || 0, currency || 'MXN', minStock || 0, maxStock || 0, location || null]
+    );
+
+    res.json({ success: true, message: "Artículo creado exitosamente", data: { id: result.insertId } });
+  } catch (error) {
+    console.error("Error en createArticle:", error);
+    res.status(500).json({ success: false, message: "Error al crear artículo", error: process.env.NODE_ENV === 'development' ? error.message : undefined });
+  }
+}
+
+// PUT /api/articles/:id
+async function updateArticle(req, res) {
+  try {
+    const { id } = req.params;
+    const { code, name, description, categoria_id, unit, price, purchasePrice, currency, minStock, maxStock, location, active } = req.body;
+
+    await pool.query(
+      `UPDATE articulos SET codigo = ?, nombre = ?, descripcion = ?, categoria_id = ?, unidad_medida = ?, precio_unitario = ?, precio_compra = ?, moneda = ?, stock_minimo = ?, stock_maximo = ?, ubicacion = ?, activo = ? WHERE id = ?`,
+      [code, name, description, categoria_id, unit, price, purchasePrice, currency, minStock, maxStock, location, active ? 1 : 0, id]
+    );
+
+    res.json({ success: true, message: "Artículo actualizado exitosamente" });
+  } catch (error) {
+    console.error("Error en updateArticle:", error);
+    res.status(500).json({ success: false, message: "Error al actualizar artículo" });
+  }
+}
+
+// DELETE /api/articles/:id
+async function deleteArticle(req, res) {
+  try {
+    const { id } = req.params;
+    await pool.query("DELETE FROM articulos WHERE id = ?", [id]);
+    res.json({ success: true, message: "Artículo eliminado exitosamente" });
+  } catch (error) {
+    console.error("Error en deleteArticle:", error);
+    res.status(500).json({ success: false, message: "Error al eliminar artículo" });
+  }
+}
+
+// ==================== PROVEEDORES ====================
+
+// POST /api/providers
+async function createProvider(req, res) {
+  try {
+    const { name, razon_social, rfc, direccion, ciudad, estado, codigo_postal, telefono, email, contacto_principal, telefono_contacto, email_contacto, condiciones_pago, dias_credito } = req.body;
+
+    if (!name || !razon_social) {
+      return res.status(400).json({ success: false, message: "Nombre y razón social son requeridos" });
+    }
+
+    const [result] = await pool.query(
+      `INSERT INTO proveedores (nombre_comercial, razon_social, rfc, direccion, ciudad, estado, codigo_postal, telefono, email, contacto_principal, telefono_contacto, email_contacto, condiciones_pago, dias_credito, activo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [name, razon_social, rfc || null, direccion || null, ciudad || null, estado || null, codigo_postal || null, telefono || null, email || null, contacto_principal || null, telefono_contacto || null, email_contacto || null, condiciones_pago || null, dias_credito || 0]
+    );
+
+    res.json({ success: true, message: "Proveedor creado exitosamente", data: { id: result.insertId } });
+  } catch (error) {
+    console.error("Error en createProvider:", error);
+    res.status(500).json({ success: false, message: "Error al crear proveedor" });
+  }
+}
+
+// PUT /api/providers/:id
+async function updateProvider(req, res) {
+  try {
+    const { id } = req.params;
+    const { name, razon_social, rfc, direccion, ciudad, estado, codigo_postal, telefono, email, contacto_principal, telefono_contacto, email_contacto, condiciones_pago, dias_credito, active } = req.body;
+
+    await pool.query(
+      `UPDATE proveedores SET nombre_comercial = ?, razon_social = ?, rfc = ?, direccion = ?, ciudad = ?, estado = ?, codigo_postal = ?, telefono = ?, email = ?, contacto_principal = ?, telefono_contacto = ?, email_contacto = ?, condiciones_pago = ?, dias_credito = ?, activo = ? WHERE id = ?`,
+      [name, razon_social, rfc, direccion, ciudad, estado, codigo_postal, telefono, email, contacto_principal, telefono_contacto, email_contacto, condiciones_pago, dias_credito, active ? 1 : 0, id]
+    );
+
+    res.json({ success: true, message: "Proveedor actualizado exitosamente" });
+  } catch (error) {
+    console.error("Error en updateProvider:", error);
+    res.status(500).json({ success: false, message: "Error al actualizar proveedor" });
+  }
+}
+
+// DELETE /api/providers/:id
+async function deleteProvider(req, res) {
+  try {
+    const { id } = req.params;
+    await pool.query("DELETE FROM proveedores WHERE id = ?", [id]);
+    res.json({ success: true, message: "Proveedor eliminado exitosamente" });
+  } catch (error) {
+    console.error("Error en deleteProvider:", error);
+    res.status(500).json({ success: false, message: "Error al eliminar proveedor" });
+  }
+}
+
+// ==================== ALMACENES ====================
+
+// POST /api/warehouses
+async function createWarehouse(req, res) {
+  try {
+    const { code, name, description, address, city, state, zipCode, manager, phone, email, capacity, type } = req.body;
+
+    if (!code || !name) {
+      return res.status(400).json({ success: false, message: "Código y nombre son requeridos" });
+    }
+
+    const [result] = await pool.query(
+      `INSERT INTO almacenes (codigo, nombre, descripcion, direccion, ciudad, estado, codigo_postal, responsable, telefono, email, capacidad_m3, tipo, activo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [code, name, description || null, address || null, city || null, state || null, zipCode || null, manager || null, phone || null, email || null, capacity || null, type || null]
+    );
+
+    res.json({ success: true, message: "Almacén creado exitosamente", data: { id: result.insertId } });
+  } catch (error) {
+    console.error("Error en createWarehouse:", error);
+    res.status(500).json({ success: false, message: "Error al crear almacén" });
+  }
+}
+
+// PUT /api/warehouses/:id
+async function updateWarehouse(req, res) {
+  try {
+    const { id } = req.params;
+    const { code, name, description, address, city, state, zipCode, manager, phone, email, capacity, type, active } = req.body;
+
+    await pool.query(
+      `UPDATE almacenes SET codigo = ?, nombre = ?, descripcion = ?, direccion = ?, ciudad = ?, estado = ?, codigo_postal = ?, responsable = ?, telefono = ?, email = ?, capacidad_m3 = ?, tipo = ?, activo = ? WHERE id = ?`,
+      [code, name, description, address, city, state, zipCode, manager, phone, email, capacity, type, active ? 1 : 0, id]
+    );
+
+    res.json({ success: true, message: "Almacén actualizado exitosamente" });
+  } catch (error) {
+    console.error("Error en updateWarehouse:", error);
+    res.status(500).json({ success: false, message: "Error al actualizar almacén" });
+  }
+}
+
+// DELETE /api/warehouses/:id
+async function deleteWarehouse(req, res) {
+  try {
+    const { id } = req.params;
+    await pool.query("DELETE FROM almacenes WHERE id = ?", [id]);
+    res.json({ success: true, message: "Almacén eliminado exitosamente" });
+  } catch (error) {
+    console.error("Error en deleteWarehouse:", error);
+    res.status(500).json({ success: false, message: "Error al eliminar almacén" });
+  }
+}
+
+// ==================== ÓRDENES DE COMPRA Y PAGO ====================
+
+// POST /api/requests/:id/generate-purchase-orders
+async function generatePurchaseOrders(req, res) {
+  const connection = await pool.getConnection();
+
+  try {
+    const { id } = req.params;
+    await connection.beginTransaction();
+
+    // Verificar que la solicitud esté aprobada
+    const [solicitud] = await connection.query(
+      'SELECT * FROM solicitudes WHERE id = ? AND estado = "Aprobada"',
+      [id]
+    );
+
+    if (solicitud.length === 0) {
+      await connection.rollback();
+      connection.release();
+      return res.status(404).json({
+        success: false,
+        message: 'Solicitud no encontrada o no está aprobada'
+      });
+    }
+
+    // Verificar el tipo de documento adjunto
+    const [attachments] = await connection.query(
+      'SELECT tipo_documento FROM archivos_adjuntos WHERE solicitud_id = ?',
+      [id]
+    );
+
+    const hasFacturas = attachments.some(att => att.tipo_documento === 'factura');
+
+    if (hasFacturas) {
+      await connection.rollback();
+      connection.release();
+      return res.status(400).json({
+        success: false,
+        message: 'Esta solicitud contiene facturas. Debe generar una Orden de Pago, no Orden de Compra.'
+      });
+    }
+
+    // Obtener líneas de la solicitud agrupadas por proveedor
+    const [lines] = await connection.query(
+      `SELECT
+        sl.*,
+        c.nombre as categoria_nombre
+      FROM solicitud_lineas sl
+      LEFT JOIN categorias c ON sl.categoria_id = c.id
+      WHERE sl.solicitud_id = ?
+      ORDER BY sl.proveedor_id, sl.orden`,
+      [id]
+    );
+
+    if (lines.length === 0) {
+      await connection.rollback();
+      connection.release();
+      return res.status(400).json({
+        success: false,
+        message: 'No hay líneas en esta solicitud'
+      });
+    }
+
+    // Agrupar líneas por proveedor
+    const linesByProvider = {};
+    lines.forEach(line => {
+      const providerId = line.proveedor_id || 0; // 0 para proveedor sin asignar
+      if (!linesByProvider[providerId]) {
+        linesByProvider[providerId] = [];
+      }
+      linesByProvider[providerId].push(line);
+    });
+
+    const providerIds = Object.keys(linesByProvider);
+    const ordenesCreadas = [];
+
+    // Crear una OC por cada proveedor
+    for (const providerId of providerIds) {
+      const providerLines = linesByProvider[providerId];
+
+      // Calcular totales de las líneas de este proveedor
+      let subtotal = 0;
+      providerLines.forEach(line => {
+        subtotal += parseFloat(line.subtotal_linea || line.importe || line.monto || 0);
+      });
+
+      const iva = subtotal * 0.16;
+      const total = subtotal + iva;
+
+      // Crear la orden de compra
+      const [ocResult] = await connection.query(
+        `INSERT INTO ordenes_compra (
+          solicitud_id,
+          proveedor_id,
+          fecha_entrega_requerida,
+          subtotal,
+          iva,
+          total,
+          moneda,
+          condiciones_pago,
+          metodo_pago,
+          dias_credito,
+          direccion_entrega,
+          responsable_recepcion,
+          telefono_responsable,
+          instrucciones_especiales
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          providerId === '0' ? null : providerId,
+          solicitud[0].fecha_entrega_requerida || null,
+          subtotal,
+          iva,
+          total,
+          solicitud[0].moneda || 'MXN',
+          solicitud[0].condiciones_pago || null,
+          solicitud[0].metodo_pago || null,
+          solicitud[0].dias_credito || 0,
+          solicitud[0].direccion_entrega || null,
+          solicitud[0].responsable_recepcion || null,
+          solicitud[0].telefono_responsable || null,
+          solicitud[0].instrucciones_especiales || null
+        ]
+      );
+
+      const ordenCompraId = ocResult.insertId;
+
+      // Obtener el folio generado por el trigger
+      const [ocCreada] = await connection.query(
+        'SELECT folio FROM ordenes_compra WHERE id = ?',
+        [ordenCompraId]
+      );
+
+      // Insertar las líneas de esta OC
+      for (const line of providerLines) {
+        await connection.query(
+          `INSERT INTO orden_compra_lineas (
+            orden_compra_id,
+            solicitud_linea_id,
+            sku,
+            descripcion,
+            categoria_id,
+            cantidad,
+            unidad_medida,
+            precio_unitario,
+            importe,
+            descuento,
+            subtotal,
+            centro_costo_id,
+            notas,
+            orden
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            ordenCompraId,
+            line.id,
+            line.sku || null,
+            line.descripcion,
+            line.categoria_id,
+            line.cantidad || 1,
+            line.unidad_medida || 'PZA',
+            line.precio_unitario || line.monto || 0,
+            line.importe || line.monto || 0,
+            line.descuento_linea || 0,
+            line.subtotal_linea || line.monto || 0,
+            line.centro_costo_id || null,
+            line.notas_linea || null,
+            line.orden || 0
+          ]
+        );
+      }
+
+      ordenesCreadas.push({
+        id: ordenCompraId,
+        folio: ocCreada[0].folio,
+        proveedor_id: providerId === '0' ? null : providerId,
+        total: total
+      });
+    }
+
+    await connection.commit();
+    connection.release();
+
+    res.json({
+      success: true,
+      message: `Se generaron ${ordenesCreadas.length} orden(es) de compra exitosamente`,
+      data: ordenesCreadas
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    connection.release();
+    console.error('Error en generatePurchaseOrders:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al generar órdenes de compra',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+}
+
+// POST /api/requests/:id/generate-payment-order
+async function generatePaymentOrder(req, res) {
+  const connection = await pool.getConnection();
+
+  try {
+    const { id } = req.params;
+    await connection.beginTransaction();
+
+    // Verificar que la solicitud esté aprobada
+    const [solicitud] = await connection.query(
+      'SELECT * FROM solicitudes WHERE id = ? AND estado = "Aprobada"',
+      [id]
+    );
+
+    if (solicitud.length === 0) {
+      await connection.rollback();
+      connection.release();
+      return res.status(404).json({
+        success: false,
+        message: 'Solicitud no encontrada o no está aprobada'
+      });
+    }
+
+    // Verificar que tenga facturas adjuntas
+    const [attachments] = await connection.query(
+      'SELECT tipo_documento FROM archivos_adjuntos WHERE solicitud_id = ?',
+      [id]
+    );
+
+    const hasFacturas = attachments.some(att => att.tipo_documento === 'factura');
+
+    if (!hasFacturas) {
+      await connection.rollback();
+      connection.release();
+      return res.status(400).json({
+        success: false,
+        message: 'Esta solicitud debe tener facturas adjuntas para generar una Orden de Pago.'
+      });
+    }
+
+    // Calcular totales
+    const subtotal = parseFloat(solicitud[0].subtotal || solicitud[0].monto_total || 0);
+    const iva = parseFloat(solicitud[0].iva || subtotal * 0.16);
+    const retenciones = 0; // Se puede calcular según reglas de negocio
+    const totalPagar = subtotal + iva - retenciones;
+
+    // Obtener proveedor principal (del primer línea con proveedor)
+    const [lineaConProveedor] = await connection.query(
+      'SELECT proveedor_id FROM solicitud_lineas WHERE solicitud_id = ? AND proveedor_id IS NOT NULL LIMIT 1',
+      [id]
+    );
+
+    const proveedorId = lineaConProveedor.length > 0 ? lineaConProveedor[0].proveedor_id : null;
+
+    // Crear la orden de pago
+    const [opResult] = await connection.query(
+      `INSERT INTO ordenes_pago (
+        solicitud_id,
+        proveedor_id,
+        fecha_pago_programada,
+        subtotal,
+        iva,
+        retenciones,
+        total_pagar,
+        moneda,
+        metodo_pago,
+        notas
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        proveedorId,
+        solicitud[0].fecha_entrega_requerida || null,
+        subtotal,
+        iva,
+        retenciones,
+        totalPagar,
+        solicitud[0].moneda || 'MXN',
+        solicitud[0].metodo_pago || 'Transferencia',
+        'Orden de pago generada automáticamente'
+      ]
+    );
+
+    // Obtener el folio generado
+    const [opCreada] = await connection.query(
+      'SELECT folio FROM ordenes_pago WHERE id = ?',
+      [opResult.insertId]
+    );
+
+    await connection.commit();
+    connection.release();
+
+    res.json({
+      success: true,
+      message: 'Orden de pago generada exitosamente',
+      data: {
+        id: opResult.insertId,
+        folio: opCreada[0].folio,
+        total_pagar: totalPagar
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    connection.release();
+    console.error('Error en generatePaymentOrder:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al generar orden de pago',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+}
+
 module.exports = {
   createRequest,
   approveRequest,
@@ -1012,4 +1500,15 @@ module.exports = {
   resetPassword__,
   updatePurchaseOrderInfo,
   updateRequestLine,
+  createArticle,
+  updateArticle,
+  deleteArticle,
+  createProvider,
+  updateProvider,
+  deleteProvider,
+  createWarehouse,
+  updateWarehouse,
+  deleteWarehouse,
+  generatePurchaseOrders,
+  generatePaymentOrder,
 };
