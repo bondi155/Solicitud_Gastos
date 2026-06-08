@@ -36,6 +36,7 @@ export default function RequestForm({ onSubmit, onCancel }) {
     category: "",
     amount: "",
     description: "",
+    costCenter: "",
   })
 
   const [formData, setFormData] = useState({
@@ -43,6 +44,10 @@ export default function RequestForm({ onSubmit, onCancel }) {
     date: "",
     department: "",
     costCenter: "",
+    paymentTerms: "",
+    paymentMethod: "",
+    creditDays: "0",
+    documentType: "otro",
   })
   const [attachments, setAttachments] = useState([])
 
@@ -141,6 +146,7 @@ export default function RequestForm({ onSubmit, onCancel }) {
       category: "",
       amount: "",
       description: "",
+      costCenter: "",
     })
     setError(null)
   }
@@ -190,6 +196,10 @@ export default function RequestForm({ onSubmit, onCancel }) {
       formDataToSend.append("costCenter", formData.costCenter || "")
       formDataToSend.append("userId", loggedUserId)
       formDataToSend.append("totalAmount", getTotalAmount())
+      formDataToSend.append("paymentTerms", formData.paymentTerms || "")
+      formDataToSend.append("paymentMethod", formData.paymentMethod || "")
+      formDataToSend.append("creditDays", formData.creditDays || "0")
+      formDataToSend.append("documentType", formData.documentType || "otro")
 
       formDataToSend.append("lines", JSON.stringify(lines))
 
@@ -211,6 +221,10 @@ export default function RequestForm({ onSubmit, onCancel }) {
         date: "",
         department: "",
         costCenter: "",
+        paymentTerms: "",
+        paymentMethod: "",
+        creditDays: "0",
+        documentType: "otro",
       })
       setLines([])
       setCurrentLine({
@@ -316,6 +330,55 @@ export default function RequestForm({ onSubmit, onCancel }) {
             fullWidth
           />
 
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr 1fr" }, gap: 2 }}>
+            <TextField
+              select
+              label="Términos de Pago"
+              value={formData.paymentTerms}
+              onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value })}
+              fullWidth
+            >
+              <MenuItem value="">Seleccione términos</MenuItem>
+              <MenuItem value="pago_una_exhibicion">Pago en una exhibición</MenuItem>
+              <MenuItem value="credito">Crédito</MenuItem>
+              <MenuItem value="pago_vs_entrega">Pago vs entrega</MenuItem>
+            </TextField>
+
+            <TextField
+              select
+              label="Método de Pago"
+              value={formData.paymentMethod}
+              onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+              fullWidth
+            >
+              <MenuItem value="">Seleccione método</MenuItem>
+              <MenuItem value="transferencia">Transferencia</MenuItem>
+              <MenuItem value="cheque">Cheque</MenuItem>
+              <MenuItem value="efectivo">Efectivo</MenuItem>
+            </TextField>
+
+            <TextField
+              label="Días de Crédito"
+              type="number"
+              value={formData.creditDays}
+              onChange={(e) => setFormData({ ...formData, creditDays: e.target.value })}
+              fullWidth
+              InputProps={{ inputProps: { min: 0 } }}
+            />
+
+            <TextField
+              select
+              label="Tipo de Documento"
+              value={formData.documentType}
+              onChange={(e) => setFormData({ ...formData, documentType: e.target.value })}
+              fullWidth
+            >
+              <MenuItem value="factura">Factura</MenuItem>
+              <MenuItem value="cotizacion">Cotización</MenuItem>
+              <MenuItem value="otro">Otro</MenuItem>
+            </TextField>
+          </Box>
+
           <Box sx={{ mt: 2 }}>
             <Typography variant="h6" gutterBottom>
               Líneas de Gastos
@@ -370,6 +433,24 @@ export default function RequestForm({ onSubmit, onCancel }) {
                 rows={2}
                 fullWidth
               />
+
+              <TextField
+                select
+                label="Centro de Costos (Línea)"
+                value={currentLine.costCenter}
+                onChange={(e) => setCurrentLine({ ...currentLine, costCenter: e.target.value })}
+                fullWidth
+                helperText="Asigne un centro de costos específico para esta línea"
+              >
+                <MenuItem value="">Sin centro de costos</MenuItem>
+                {costCenters
+                  .filter((cc) => cc.active)
+                  .map((cc) => (
+                    <MenuItem key={cc.id} value={cc.code}>
+                      {cc.code} - {cc.name}
+                    </MenuItem>
+                  ))}
+              </TextField>
 
               <Button variant="contained" startIcon={<AddIcon />} onClick={handleAddLine} fullWidth>
                 Agregar Línea

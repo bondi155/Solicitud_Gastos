@@ -47,6 +47,7 @@ import {
 } from "@mui/icons-material";
 import apiService from "../api/apiService";
 import PurchaseOrderSection from "./PurchaseOrderSection";
+import GenerarOrdenCompra from "./GenerarOrdenCompra";
 
 export default function RequestsList({ requests }) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -67,6 +68,7 @@ export default function RequestsList({ requests }) {
 
   const [editingLineId, setEditingLineId] = useState(null);
   const [editingProvider, setEditingProvider] = useState("");
+  const [openGenerarOC, setOpenGenerarOC] = useState(false);
 
   const fetchCategories = async () => {
     try {
@@ -236,18 +238,7 @@ export default function RequestsList({ requests }) {
   };
 
   const handleGeneratePurchaseOrder = () => {
-    // Check if all lines have providers
-    const allLinesHaveProvider = selectedRequest.lines?.every(
-      (line) => line.proveedor
-    );
-
-    if (!allLinesHaveProvider) {
-      alert("Todas las líneas deben tener un proveedor asignado");
-      return;
-    }
-
-    // TODO: Call API to generate purchase order
-    alert("Orden de compra generada exitosamente");
+    setOpenGenerarOC(true);
   };
 
   if (loading) {
@@ -1060,6 +1051,19 @@ export default function RequestsList({ requests }) {
           </>
         )}
       </Dialog>
+
+      {/* Diálogo para Generar Orden de Compra/Pago */}
+      <GenerarOrdenCompra
+        open={openGenerarOC}
+        onClose={() => setOpenGenerarOC(false)}
+        request={selectedRequest}
+        onSuccess={async (result) => {
+          // Recargar la solicitud actualizada
+          const updatedRequest = await apiService.getRequestDetail(selectedRequest.id);
+          setSelectedRequest(updatedRequest.data);
+          setOpenGenerarOC(false);
+        }}
+      />
     </Box>
   );
 }

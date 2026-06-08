@@ -177,6 +177,16 @@ rejectRequest: async (id, comments, approverId) => {
     return response.data
   },
 
+  generatePurchaseOrders: async (requestId) => {
+    const response = await axios.post(`${API_BASE_URL}/api/requests/${requestId}/generate-purchase-orders`)
+    return response.data
+  },
+
+  generatePaymentOrder: async (requestId) => {
+    const response = await axios.post(`${API_BASE_URL}/api/requests/${requestId}/generate-payment-order`)
+    return response.data
+  },
+
   // Proveedores
   getProviders: async () => {
     const response = await axios.get(`${API_BASE_URL}/api/providers`)

@@ -1,13 +1,13 @@
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
-  Typography, 
-  Button, 
-  Box, 
-  Paper, 
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  Typography,
+  Button,
+  Box,
+  Paper,
   Chip,
-  Container 
+  Container
 } from "@mui/material"
 import Grid from '@mui/material/Grid2' // Grid2 en MUI v6
 import {
@@ -19,8 +19,10 @@ import {
   Description as FileTextIcon,
 } from "@mui/icons-material"
 import Chart from "react-apexcharts"
+import { useNavigate } from "react-router-dom"
 
 export function DashboardHome() {
+  const navigate = useNavigate()
   // Datos de ejemplo - estos vendrán de tu API MySQL
   const stats = {
     totalRequests: 156,
@@ -178,7 +180,11 @@ export function DashboardHome() {
               Resumen de solicitudes de gastos
             </Typography>
           </Box>
-          <Button variant="contained" startIcon={<PlusIcon />}>
+          <Button
+            variant="contained"
+            startIcon={<PlusIcon />}
+            onClick={() => navigate('/dashboard/Solicitud')}
+          >
             Nueva Solicitud
           </Button>
         </Box>

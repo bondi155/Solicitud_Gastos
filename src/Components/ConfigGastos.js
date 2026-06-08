@@ -395,6 +395,34 @@ export default function Configuration() {
               multiline
               rows={3}
             />
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Tipo de Artículo</InputLabel>
+              <Select
+                value={formData.tipo_articulo || "no_inventariable"}
+                onChange={(e) => setFormData({ ...formData, tipo_articulo: e.target.value })}
+                label="Tipo de Artículo"
+              >
+                <MenuItem value="inventariable">Inventariable</MenuItem>
+                <MenuItem value="no_inventariable">No Inventariable</MenuItem>
+                <MenuItem value="servicio">Servicio</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField
+              fullWidth
+              label="Código de Artículo"
+              value={formData.codigo_articulo || ""}
+              onChange={(e) => setFormData({ ...formData, codigo_articulo: e.target.value })}
+              margin="normal"
+              helperText="Código interno o SKU del artículo"
+            />
+            <TextField
+              fullWidth
+              label="Unidad de Medida"
+              value={formData.unidad_medida_default || "PZA"}
+              onChange={(e) => setFormData({ ...formData, unidad_medida_default: e.target.value })}
+              margin="normal"
+              helperText="Ej: PZA, KG, LT, M, etc."
+            />
           </>
         )
 
