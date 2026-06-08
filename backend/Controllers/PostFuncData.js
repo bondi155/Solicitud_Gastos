@@ -456,7 +456,7 @@ async function getRequestDetail(req, res) {
 // POST /api/categories
 async function createCategory(req, res) {
   try {
-    const { name, description } = req.body;
+    const { name, description, tipo_articulo, codigo_articulo, unidad_medida_default } = req.body;
 
     if (!name) {
       return res
@@ -466,10 +466,10 @@ async function createCategory(req, res) {
 
     const [result] = await pool.query(
       `
-      INSERT INTO categorias (nombre, descripcion, activo)
-      VALUES (?, ?, 1)
+      INSERT INTO categorias (nombre, descripcion, tipo_articulo, codigo_articulo, unidad_medida_default, activo)
+      VALUES (?, ?, ?, ?, ?, 1)
     `,
-      [name, description || null]
+      [name, description || null, tipo_articulo || 'no_inventariable', codigo_articulo || null, unidad_medida_default || 'PZA']
     );
 
     res.json({
@@ -489,15 +489,15 @@ async function createCategory(req, res) {
 async function updateCategory(req, res) {
   try {
     const { id } = req.params;
-    const { name, description, active } = req.body;
+    const { name, description, active, tipo_articulo, codigo_articulo, unidad_medida_default } = req.body;
 
     await pool.query(
       `
-      UPDATE categorias 
-      SET nombre = ?, descripcion = ?, activo = ?
+      UPDATE categorias
+      SET nombre = ?, descripcion = ?, tipo_articulo = ?, codigo_articulo = ?, unidad_medida_default = ?, activo = ?
       WHERE id = ?
     `,
-      [name, description, active ? 1 : 0, id]
+      [name, description, tipo_articulo || 'no_inventariable', codigo_articulo || null, unidad_medida_default || 'PZA', active ? 1 : 0, id]
     );
 
     res.json({
