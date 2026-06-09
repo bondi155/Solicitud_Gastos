@@ -33,6 +33,11 @@ export default function GenerarOrdenCompra({ open, onClose, request, onSuccess }
   const [error, setError] = useState(null)
   const [ordenesGeneradas, setOrdenesGeneradas] = useState(null)
 
+  // Validar que request existe antes de renderizar
+  if (!request) {
+    return null
+  }
+
   // Detectar tipo de documento
   const tipoDocumento = request?.attachments?.[0]?.tipo_documento || request?.tipo_documento || 'cotizacion'
   const esFactura = tipoDocumento === 'factura'
