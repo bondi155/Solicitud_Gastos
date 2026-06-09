@@ -1152,6 +1152,309 @@ async function deleteWarehouse(req, res) {
   }
 }
 
+// ==================== ÓRDENES DE COMPRA Y PAGO ====================
+
+// POST /api/requests/:id/generate-purchase-orders
+async function generatePurchaseOrders(req, res) {
+  const connection = await pool.getConnection();
+
+  try {
+    const { id } = req.params;
+    await connection.beginTransaction();
+
+    // Verificar que la solicitud esté aprobada
+    const [solicitud] = await connection.query(
+      'SELECT * FROM solicitudes WHERE id = ? AND estado = "Aprobada"',
+      [id]
+    );
+
+    if (solicitud.length === 0) {
+      await connection.rollback();
+      connection.release();
+      return res.status(404).json({
+        success: false,
+        message: 'Solicitud no encontrada o no está aprobada'
+      });
+    }
+
+    // Verificar el tipo de documento adjunto
+    const [attachments] = await connection.query(
+      'SELECT tipo_documento FROM archivos_adjuntos WHERE solicitud_id = ?',
+      [id]
+    );
+
+    const hasFacturas = attachments.some(att => att.tipo_documento === 'factura');
+
+    if (hasFacturas) {
+      await connection.rollback();
+      connection.release();
+      return res.status(400).json({
+        success: false,
+        message: 'Esta solicitud contiene facturas. Debe generar una Orden de Pago, no Orden de Compra.'
+      });
+    }
+
+    // Obtener líneas de la solicitud agrupadas por proveedor
+    const [lines] = await connection.query(
+      `SELECT
+        sl.*,
+        c.nombre as categoria_nombre
+      FROM solicitud_lineas sl
+      LEFT JOIN categorias c ON sl.categoria_id = c.id
+      WHERE sl.solicitud_id = ?
+      ORDER BY sl.proveedor_id, sl.orden`,
+      [id]
+    );
+
+    if (lines.length === 0) {
+      await connection.rollback();
+      connection.release();
+      return res.status(400).json({
+        success: false,
+        message: 'No hay líneas en esta solicitud'
+      });
+    }
+
+    // Agrupar líneas por proveedor
+    const linesByProvider = {};
+    lines.forEach(line => {
+      const providerId = line.proveedor_id || 0;
+      if (!linesByProvider[providerId]) {
+        linesByProvider[providerId] = [];
+      }
+      linesByProvider[providerId].push(line);
+    });
+
+    const providerIds = Object.keys(linesByProvider);
+    const ordenesCreadas = [];
+
+    // Crear una OC por cada proveedor
+    for (const providerId of providerIds) {
+      const providerLines = linesByProvider[providerId];
+
+      let subtotal = 0;
+      providerLines.forEach(line => {
+        subtotal += parseFloat(line.subtotal_linea || line.importe || line.monto || 0);
+      });
+
+      const iva = subtotal * 0.16;
+      const total = subtotal + iva;
+
+      const [ocResult] = await connection.query(
+        `INSERT INTO ordenes_compra (
+          solicitud_id,
+          proveedor_id,
+          fecha_entrega_requerida,
+          subtotal,
+          iva,
+          total,
+          moneda,
+          condiciones_pago,
+          metodo_pago,
+          dias_credito,
+          direccion_entrega,
+          responsable_recepcion,
+          telefono_responsable,
+          instrucciones_especiales
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          providerId === '0' ? null : providerId,
+          solicitud[0].fecha_entrega_requerida || null,
+          subtotal,
+          iva,
+          total,
+          solicitud[0].moneda || 'MXN',
+          solicitud[0].condiciones_pago || null,
+          solicitud[0].metodo_pago || null,
+          solicitud[0].dias_credito || 0,
+          solicitud[0].direccion_entrega || null,
+          solicitud[0].responsable_recepcion || null,
+          solicitud[0].telefono_responsable || null,
+          solicitud[0].instrucciones_especiales || null
+        ]
+      );
+
+      const ordenCompraId = ocResult.insertId;
+
+      const [ocCreada] = await connection.query(
+        'SELECT folio FROM ordenes_compra WHERE id = ?',
+        [ordenCompraId]
+      );
+
+      for (const line of providerLines) {
+        await connection.query(
+          `INSERT INTO orden_compra_lineas (
+            orden_compra_id,
+            solicitud_linea_id,
+            sku,
+            descripcion,
+            categoria_id,
+            cantidad,
+            unidad_medida,
+            precio_unitario,
+            importe,
+            descuento,
+            subtotal,
+            centro_costo_id,
+            notas,
+            orden
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            ordenCompraId,
+            line.id,
+            line.sku || null,
+            line.descripcion,
+            line.categoria_id,
+            line.cantidad || 1,
+            line.unidad_medida || 'PZA',
+            line.precio_unitario || line.monto || 0,
+            line.importe || line.monto || 0,
+            line.descuento_linea || 0,
+            line.subtotal_linea || line.monto || 0,
+            line.centro_costo_id || null,
+            line.notas_linea || null,
+            line.orden || 0
+          ]
+        );
+      }
+
+      ordenesCreadas.push({
+        id: ordenCompraId,
+        folio: ocCreada[0].folio,
+        proveedor_id: providerId === '0' ? null : providerId,
+        total: total
+      });
+    }
+
+    await connection.commit();
+    connection.release();
+
+    res.json({
+      success: true,
+      message: `Se generaron ${ordenesCreadas.length} orden(es) de compra exitosamente`,
+      data: ordenesCreadas
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    connection.release();
+    console.error('Error en generatePurchaseOrders:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al generar órdenes de compra',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+}
+
+// POST /api/requests/:id/generate-payment-order
+async function generatePaymentOrder(req, res) {
+  const connection = await pool.getConnection();
+
+  try {
+    const { id } = req.params;
+    await connection.beginTransaction();
+
+    const [solicitud] = await connection.query(
+      'SELECT * FROM solicitudes WHERE id = ? AND estado = "Aprobada"',
+      [id]
+    );
+
+    if (solicitud.length === 0) {
+      await connection.rollback();
+      connection.release();
+      return res.status(404).json({
+        success: false,
+        message: 'Solicitud no encontrada o no está aprobada'
+      });
+    }
+
+    const [attachments] = await connection.query(
+      'SELECT tipo_documento FROM archivos_adjuntos WHERE solicitud_id = ?',
+      [id]
+    );
+
+    const hasFacturas = attachments.some(att => att.tipo_documento === 'factura');
+
+    if (!hasFacturas) {
+      await connection.rollback();
+      connection.release();
+      return res.status(400).json({
+        success: false,
+        message: 'Esta solicitud debe tener facturas adjuntas para generar una Orden de Pago.'
+      });
+    }
+
+    const subtotal = parseFloat(solicitud[0].subtotal || solicitud[0].monto_total || 0);
+    const iva = parseFloat(solicitud[0].iva || subtotal * 0.16);
+    const retenciones = 0;
+    const totalPagar = subtotal + iva - retenciones;
+
+    const [lineaConProveedor] = await connection.query(
+      'SELECT proveedor_id FROM solicitud_lineas WHERE solicitud_id = ? AND proveedor_id IS NOT NULL LIMIT 1',
+      [id]
+    );
+
+    const proveedorId = lineaConProveedor.length > 0 ? lineaConProveedor[0].proveedor_id : null;
+
+    const [opResult] = await connection.query(
+      `INSERT INTO ordenes_pago (
+        solicitud_id,
+        proveedor_id,
+        fecha_pago_programada,
+        subtotal,
+        iva,
+        retenciones,
+        total_pagar,
+        moneda,
+        metodo_pago,
+        notas
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        proveedorId,
+        solicitud[0].fecha_entrega_requerida || null,
+        subtotal,
+        iva,
+        retenciones,
+        totalPagar,
+        solicitud[0].moneda || 'MXN',
+        solicitud[0].metodo_pago || 'Transferencia',
+        'Orden de pago generada automáticamente'
+      ]
+    );
+
+    const [opCreada] = await connection.query(
+      'SELECT folio FROM ordenes_pago WHERE id = ?',
+      [opResult.insertId]
+    );
+
+    await connection.commit();
+    connection.release();
+
+    res.json({
+      success: true,
+      message: 'Orden de pago generada exitosamente',
+      data: {
+        id: opResult.insertId,
+        folio: opCreada[0].folio,
+        total_pagar: totalPagar
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    connection.release();
+    console.error('Error en generatePaymentOrder:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al generar orden de pago',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+}
+
 module.exports = {
   createRequest,
   approveRequest,
@@ -1183,4 +1486,6 @@ module.exports = {
   createWarehouse,
   updateWarehouse,
   deleteWarehouse,
+  generatePurchaseOrders,
+  generatePaymentOrder,
 };
