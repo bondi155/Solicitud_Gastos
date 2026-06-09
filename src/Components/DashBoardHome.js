@@ -19,10 +19,10 @@ import {
   Description as FileTextIcon,
 } from "@mui/icons-material"
 import Chart from "react-apexcharts"
-import { useNavigate } from "react-router-dom"
+import { useNavigation } from '@toolpad/core/useNavigation'
 
 export function DashboardHome() {
-  const navigate = useNavigate()
+  const navigation = useNavigation()
   // Datos de ejemplo - estos vendrán de tu API MySQL
   const stats = {
     totalRequests: 156,
@@ -183,7 +183,7 @@ export function DashboardHome() {
           <Button
             variant="contained"
             startIcon={<PlusIcon />}
-            onClick={() => navigate('/dashboard/Solicitud')}
+            onClick={() => navigation.navigate('/Solicitud')}
           >
             Nueva Solicitud
           </Button>
