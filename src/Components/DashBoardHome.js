@@ -7,7 +7,9 @@ import {
   Box,
   Paper,
   Chip,
-  Container
+  Container,
+  Dialog,
+  DialogContent,
 } from "@mui/material"
 import Grid from '@mui/material/Grid2' // Grid2 en MUI v6
 import {
@@ -19,10 +21,24 @@ import {
   Description as FileTextIcon,
 } from "@mui/icons-material"
 import Chart from "react-apexcharts"
-import { useNavigation } from '@toolpad/core/useNavigation'
+import { useState } from 'react'
+import RequestForm from './CargaSol'
 
 export function DashboardHome() {
-  const navigation = useNavigation()
+  const [openDialog, setOpenDialog] = useState(false)
+
+  const handleNuevaSolicitud = () => {
+    setOpenDialog(true)
+  }
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false)
+  }
+
+  const handleSubmit = (data) => {
+    console.log('Form submitted:', data)
+    setOpenDialog(false)
+  }
   // Datos de ejemplo - estos vendrán de tu API MySQL
   const stats = {
     totalRequests: 156,
@@ -183,7 +199,7 @@ export function DashboardHome() {
           <Button
             variant="contained"
             startIcon={<PlusIcon />}
-            onClick={() => navigation.navigate('/Solicitud')}
+            onClick={handleNuevaSolicitud}
           >
             Nueva Solicitud
           </Button>
@@ -388,6 +404,21 @@ export function DashboardHome() {
           </CardContent>
         </Card>
       </Container>
+
+      {/* Dialog para Nueva Solicitud */}
+      <Dialog
+        open={openDialog}
+        onClose={handleCloseDialog}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogContent>
+          <RequestForm
+            onSubmit={handleSubmit}
+            onCancel={handleCloseDialog}
+          />
+        </DialogContent>
+      </Dialog>
     </Box>
   )
 }
