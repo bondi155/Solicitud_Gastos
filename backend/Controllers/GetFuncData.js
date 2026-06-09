@@ -273,7 +273,7 @@ async function getRequestDetail(req, res) {
 
     const [attachments] = await pool.query(
       `
-      SELECT nombre_archivo, ruta_archivo
+      SELECT nombre_archivo, ruta_archivo as url_archivo
       FROM archivos_adjuntos
       WHERE solicitud_id = ?
     `,

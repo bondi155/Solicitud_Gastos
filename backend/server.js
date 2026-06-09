@@ -95,6 +95,9 @@ app.post("/api/requests/:id/reject", authenticateToken, PostDataController.rejec
 app.post("/api/requests", authenticateToken, upload.array("attachments", 5), PostDataController.createRequest)
 app.put("/api/requests/:id/purchase-order", authenticateToken, PostDataController.updatePurchaseOrderInfo)
 app.put("/api/request-lines/:id", authenticateToken, PostDataController.updateRequestLine)
+app.post("/api/requests/:id/generate-purchase-orders", authenticateToken, PostDataController.generatePurchaseOrders)
+app.post("/api/requests/:id/generate-payment-order", authenticateToken, PostDataController.generatePaymentOrder)
+
 // ==================== CONFIGURACIÓN ====================
 // Categorías
 app.get("/api/categories", authenticateToken, GetDataController.getCategories)
